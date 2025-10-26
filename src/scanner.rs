@@ -89,7 +89,7 @@ pub async fn count_files(path: &Path) -> u64 {
 pub async fn scan_directory<F>(
     path: &Path,
     progress_callback: F,
-) -> Result<ScanStats, std::io::Error>
+) -> color_eyre::Result<ScanStats>
 where
     F: Fn(String) + Send + Sync + 'static,
 {
@@ -143,11 +143,10 @@ where
             }
         }
     })
-    .await
-    .map_err(std::io::Error::other)?;
+    .await?;
 
     let stats = Arc::try_unwrap(stats)
-        .map_err(|_| std::io::Error::other("Failed to unwrap stats"))?
+        .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap stats"))?
         .into_inner();
 
     Ok(stats)

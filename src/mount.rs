@@ -4,7 +4,7 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub async fn mount_drive_readonly(device: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
     // Check if already mounted
     if let Some(existing_mount) = get_mount_point(device)? {
         println!(
@@ -141,7 +141,7 @@ pub async fn mount_drive_readonly(device: &str) -> Result<PathBuf, Box<dyn std::
     Ok(new_mount_point)
 }
 
-pub fn get_mount_point(device: &str) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+pub fn get_mount_point(device: &str) -> color_eyre::Result<Option<PathBuf>> {
     let output = Command::new("findmnt")
         .args(["-n", "-o", "TARGET", device])
         .output()?;
@@ -156,7 +156,7 @@ pub fn get_mount_point(device: &str) -> Result<Option<PathBuf>, Box<dyn std::err
     Ok(None)
 }
 
-pub fn is_mounted_readonly(path: &Path) -> Result<bool, Box<dyn std::error::Error>> {
+pub fn is_mounted_readonly(path: &Path) -> color_eyre::Result<bool> {
     let output = Command::new("findmnt")
         .args(["-n", "-o", "OPTIONS", path.to_str().unwrap()])
         .output()?;
@@ -170,7 +170,7 @@ pub fn is_mounted_readonly(path: &Path) -> Result<bool, Box<dyn std::error::Erro
     Ok(false)
 }
 
-pub fn validate_source_path(drive: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub fn validate_source_path(drive: &str) -> color_eyre::Result<PathBuf> {
     let path = PathBuf::from(drive);
     if !path.exists() {
         eprintln!(
@@ -206,7 +206,7 @@ pub fn validate_source_path(drive: &str) -> Result<PathBuf, Box<dyn std::error::
     Ok(path)
 }
 
-pub fn unmount_drive(mount_point: &Path, _device: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn unmount_drive(mount_point: &Path, _device: &str) -> color_eyre::Result<()> {
     // Only unmount if it's a mount point we created
     let mount_point_str = mount_point.to_string_lossy();
     if !mount_point_str.starts_with("/mnt/tap_") {
@@ -233,7 +233,7 @@ pub fn unmount_drive(mount_point: &Path, _device: &str) -> Result<(), Box<dyn st
             style("Warning:").yellow().bold()
         );
         eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-        return Err("Failed to unmount drive".into());
+        return Err(color_eyre::eyre::eyre!("Failed to unmount drive"));
     }
 
     println!(

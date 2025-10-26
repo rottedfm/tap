@@ -18,7 +18,9 @@ use scanner::{count_files, scan_directory};
 use tui::{format_size, Mode, UI};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
+
     let args = Args::parse();
 
     match args.command {
@@ -37,7 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn handle_inspect(drive: &str) -> Result<(), Box<dyn std::error::Error>> {
+// TODO: move to inspect.rs
+async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
     // Check if it's a device or a path
     let is_device = drive.starts_with("/dev/");
     let source_path = if is_device {
@@ -93,7 +96,7 @@ async fn handle_inspect(drive: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     // Get UI back
     let ui = Arc::try_unwrap(ui_arc)
-        .map_err(|_| "Failed to unwrap UI")?
+        .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap UI"))?
         .into_inner();
 
     // Display scan results
@@ -124,11 +127,8 @@ async fn handle_inspect(drive: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn handle_export(
-    drive: &str,
-    output_dir: &Path,
-    dry_run: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+// TODO: move to export.rs
+async fn handle_export(drive: &str, output_dir: &Path, dry_run: bool) -> color_eyre::Result<()> {
     use console::style;
     use dialoguer::{theme::ColorfulTheme, Confirm};
 
@@ -219,7 +219,7 @@ async fn handle_export(
 
     // Get UI back
     let mut ui = Arc::try_unwrap(ui_arc)
-        .map_err(|_| "Failed to unwrap UI")?
+        .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap UI"))?
         .into_inner();
 
     // Display scan results
@@ -273,7 +273,7 @@ async fn handle_export(
 
         // Get UI back
         ui = Arc::try_unwrap(ui_arc)
-            .map_err(|_| "Failed to unwrap UI")?
+            .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap UI"))?
             .into_inner();
 
         // Clear the recent files section
@@ -322,7 +322,8 @@ async fn handle_export(
     Ok(())
 }
 
-async fn zip_directory(source_dir: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+// TODO: move to zip.rs
+async fn zip_directory(source_dir: &Path) -> color_eyre::Result<PathBuf> {
     use console::style;
     use std::fs::File;
     use walkdir::WalkDir;
@@ -366,11 +367,12 @@ async fn zip_directory(source_dir: &Path) -> Result<PathBuf, Box<dyn std::error:
     Ok(zip_path)
 }
 
+// TODO: move to log.rs
 async fn write_log_file(
     dest: &Path,
     scan_stats: &scanner::ScanStats,
     export_stats: &exporter::ExportStats,
-) -> Result<(), std::io::Error> {
+) -> color_eyre::Result<()> {
     use tokio::io::AsyncWriteExt;
 
     let log_path = dest.join("tap.log");

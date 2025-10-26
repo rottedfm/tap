@@ -3,7 +3,6 @@ use futures::stream::{self, StreamExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
-use tokio::io;
 use tokio::sync::Mutex;
 
 use crate::scanner::ScanStats;
@@ -30,7 +29,7 @@ async fn copy_file_with_rename(
     src: &Path,
     dest_dir: &Path,
     filename: &str,
-) -> Result<PathBuf, io::Error> {
+) -> color_eyre::Result<PathBuf> {
     let mut dest_path = dest_dir.join(filename);
 
     // Handle duplicate filenames
@@ -68,7 +67,7 @@ pub async fn export_files<F>(
     scan_stats: &ScanStats,
     dest_base: &Path,
     progress_callback: F,
-) -> Result<ExportStats, io::Error>
+) -> color_eyre::Result<ExportStats>
 where
     F: Fn(String) + Send + Sync + 'static,
 {
@@ -134,7 +133,7 @@ where
         .await;
 
     let export_stats = Arc::try_unwrap(export_stats)
-        .map_err(|_| io::Error::other("Failed to unwrap export stats"))?
+        .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap export stats"))?
         .into_inner();
 
     Ok(export_stats)
