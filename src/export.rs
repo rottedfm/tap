@@ -1,17 +1,26 @@
 // src/export.rs
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
+use walkdir::WalkDir;
+use zip::write::FileOptions;
+use zip::ZipWriter;
+
+use console::style;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 
 use crate::exporter::export_files;
 use crate::mount::{mount_drive_readonly, unmount_drive, validate_source_path};
 use crate::scanner::{count_files, scan_directory};
 use crate::tui::{format_size, Mode, UI};
 
-pub async fn handle_export(drive: &str, output_dir: &Path, dry_run: bool) -> color_eyre::Result<()> {
-    use console::style;
-    use dialoguer::{theme::ColorfulTheme, Confirm};
-
+pub async fn handle_export(
+    drive: &str,
+    output_dir: &Path,
+    dry_run: bool,
+) -> color_eyre::Result<()> {
     // Check if output directory already exists
     if output_dir.exists() {
         println!(
@@ -204,12 +213,6 @@ pub async fn handle_export(drive: &str, output_dir: &Path, dry_run: bool) -> col
 
 // TODO: move to zip.rs
 async fn zip_directory(source_dir: &Path) -> color_eyre::Result<PathBuf> {
-    use console::style;
-    use std::fs::File;
-    use walkdir::WalkDir;
-    use zip::write::FileOptions;
-    use zip::ZipWriter;
-
     println!("{} Creating zip archive...", style("ℹ️").cyan());
 
     // Create zip file path
@@ -253,8 +256,6 @@ async fn write_log_file(
     scan_stats: &crate::scanner::ScanStats,
     export_stats: &crate::exporter::ExportStats,
 ) -> color_eyre::Result<()> {
-    use tokio::io::AsyncWriteExt;
-
     let log_path = dest.join("tap.log");
     let mut file = tokio::fs::File::create(&log_path).await?;
 
