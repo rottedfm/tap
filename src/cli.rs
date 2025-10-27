@@ -35,12 +35,12 @@ pub enum Commands {
     /// Inspect a drive and catalog its contents
     Inspect {
         /// Drive or path to inspect (e.g, /dev/sda or /mnt/evidence)
-        drive: String,
+        drive: Option<String>,
     },
     /// Export files from a drive organized by type
     Export {
         /// Drive or path to export from (e.g, /dev/sda or /mnt/evidence)
-        drive: String,
+        drive: Option<String>,
 
         /// Output directory for organized files
         #[arg(short, long)]
