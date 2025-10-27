@@ -2,11 +2,12 @@
 mod categories;
 mod cli;
 mod export;
-mod exporter;
 mod inspect;
+mod log;
 mod mount;
 mod scanner;
 mod tui;
+mod zip;
 
 use clap::Parser;
 
@@ -27,9 +28,8 @@ async fn main() -> color_eyre::Result<()> {
         Commands::Export {
             drive,
             output_dir,
-            dry_run,
         } => {
-            handle_export(&drive, &output_dir, dry_run).await?;
+            handle_export(&drive, &output_dir).await?;
         }
     }
 

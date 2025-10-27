@@ -45,9 +45,6 @@ pub enum Commands {
         /// Output directory for organized files
         #[arg(short, long)]
         output_dir: PathBuf,
-
-        /// Dry run - show what would be done without copying
-        #[arg(long)]
-        dry_run: bool,
     },
+    // TODO: Discover -- find eleigables and output what is most likely data not boot partitions
 }
