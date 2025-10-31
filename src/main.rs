@@ -34,12 +34,13 @@ async fn main() -> color_eyre::Result<()> {
         Commands::Export {
             drive,
             output_dir,
+            zip,
         } => {
             let drive_path = match drive {
                 Some(d) => d,
                 None => pick_device()?,
             };
-            handle_export(&drive_path, &output_dir).await?;
+            handle_export(&drive_path, &output_dir, zip).await?;
         }
     }
 

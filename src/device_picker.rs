@@ -1,9 +1,28 @@
 // device_picker.rs
+use console::Term;
 use dialoguer::{theme::ColorfulTheme, Select};
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+
+const BANNER: &str = r#"
+
+    .....               ..                  ....      ..
+ .H8888888h.  ~-.    :**888H: `: .xH""    +^""888h. ~"888h
+ 888888888888x  `>  X   `8888k XX888     8X.  ?8888X  8888f
+X~     `?888888hx~ '8hx  48888 ?8888    '888x  8888X  8888~
+'      x8.^"*88*"  '8888 '8888 `8888    '88888 8888X   "88x:
+ `-:- X8888x        %888>'8888  8888     `8888 8888X  X88x.
+      488888>         "8 '888"  8888       `*` 8888X '88888X
+    .. `"88*         .-` X*"    8888      ~`...8888X  "88888
+  x88888nX"      .     .xhx.    8888       x8888888X.   `%8"
+ !"*8888888n..  :    .H88888h.~`8888.>    '%"*8888888h.   "
+'    "*88888888*    .~  `%88!` '888*~     ~    888888888!`
+        ^"***"`           `"     ""            X888^"""
+                                               `88f
+                                                88
+                                                ""           "#;
 
 #[derive(Debug)]
 pub struct BlockDevice {
@@ -150,6 +169,19 @@ fn human_readable_size(bytes: u64) -> String {
 
 /// Show interactive device picker and return selected device path
 pub fn pick_device() -> color_eyre::Result<String> {
+    // Clear screen and show banner
+    let term = Term::stdout();
+    term.clear_screen()?;
+
+    println!("{}", BANNER);
+    println!();
+    println!("{}", "=".repeat(70));
+    println!("DEVICE SELECTION");
+    println!("{}", "=".repeat(70));
+    println!();
+    println!("Available partitions (excluding system drives):");
+    println!();
+
     let devices = enumerate_block_devices()?;
 
     let items: Vec<&str> = devices
@@ -162,6 +194,8 @@ pub fn pick_device() -> color_eyre::Result<String> {
         .items(&items)
         .default(0)
         .interact()?;
+
+    println!();
 
     Ok(devices[selection].path.clone())
 }

@@ -1,5 +1,4 @@
 // src/mount.rs
-use console::style;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -8,22 +7,15 @@ pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
     // Check if already mounted
     if let Some(existing_mount) = get_mount_point(device)? {
         println!(
-            "{} Drive already mounted at: {}",
-            style("ℹ️").cyan(),
-            style(format!("{}", existing_mount.display())).bold()
+            "INFO: Drive already mounted at: {}",
+            existing_mount.display()
         );
 
         if is_mounted_readonly(&existing_mount)? {
-            println!("{} Drive is mounted read-only", style("✓").green());
+            println!("SUCCESS: Drive is mounted read-only");
             return Ok(existing_mount);
         } else {
-            println!(
-                "{} {}",
-                style("⚠️").yellow().bold(),
-                style("WARNING: Drive is mounted READ-WRITE!")
-                    .yellow()
-                    .bold()
-            );
+            println!("WARNING: Drive is mounted READ-WRITE!");
             println!("   For safety, the drive should be remounted read-only.");
 
             let remount = Confirm::with_theme(&ColorfulTheme::default())
@@ -32,10 +24,7 @@ pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
                 .interact()?;
 
             if !remount {
-                println!(
-                    "{} Continuing with read-write mount (NOT RECOMMENDED)",
-                    style("⚠️").yellow()
-                );
+                println!("WARNING: Continuing with read-write mount (NOT RECOMMENDED)");
                 return Ok(existing_mount);
             }
 
@@ -46,18 +35,18 @@ pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
                 .output()?;
 
             if !output.status.success() {
-                eprintln!("{} Failed to remount read-only", style("✗").red());
+                eprintln!("ERROR: Failed to remount read-only");
                 eprintln!("{}", String::from_utf8_lossy(&output.stderr));
                 std::process::exit(1);
             }
 
-            println!("{} Remounted as read-only", style("✓").green());
+            println!("SUCCESS: Remounted as read-only");
             return Ok(existing_mount);
         }
     }
 
     // Drive not mounted - mount it
-    println!("Drive {} is not mounted", style(device).bold());
+    println!("Drive {} is not mounted", device);
 
     let should_mount = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Mount as read-only?")
@@ -65,10 +54,7 @@ pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
         .interact()?;
 
     if !should_mount {
-        eprintln!(
-            "{} Drive must be mounted to proceed",
-            style("Error:").red().bold()
-        );
+        eprintln!("ERROR: Drive must be mounted to proceed");
         std::process::exit(1);
     }
 
@@ -78,20 +64,14 @@ pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
         device.trim_start_matches("/dev/")
     ));
 
-    println!(
-        "Creating mount point: {}",
-        style(format!("{}", new_mount_point.display())).cyan()
-    );
+    println!("Creating mount point: {}", new_mount_point.display());
 
     let output = Command::new("sudo")
         .args(["mkdir", "-p", new_mount_point.to_str().unwrap()])
         .output()?;
 
     if !output.status.success() {
-        eprintln!(
-            "{} Failed to create mount point",
-            style("Error:").red().bold()
-        );
+        eprintln!("ERROR: Failed to create mount point");
         eprintln!("{}", String::from_utf8_lossy(&output.stderr));
         std::process::exit(1);
     }
@@ -99,8 +79,8 @@ pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
     // Mount read-only
     println!(
         "Mounting {} to {} (read-only)...",
-        style(device).bold(),
-        style(format!("{}", new_mount_point.display())).cyan()
+        device,
+        new_mount_point.display()
     );
 
     let output = Command::new("sudo")
@@ -114,28 +94,21 @@ pub async fn mount_drive_readonly(device: &str) -> color_eyre::Result<PathBuf> {
         .output()?;
 
     if !output.status.success() {
-        eprintln!("{} Failed to mount drive", style("Error:").red().bold());
+        eprintln!("ERROR: Failed to mount drive");
         eprintln!("{}", String::from_utf8_lossy(&output.stderr));
 
         // Try to detect filesystem and suggest mounting
-        println!("\n{}:", style("Troubleshooting").yellow().bold());
-        println!("  1. Check if device exists: {}", style("lsblk").cyan());
-        println!(
-            "  2. Check filesystem: {}",
-            style(format!("sudo blkid {}", device)).cyan()
-        );
-        println!(
-            "  3. Try manual mount: {}",
-            style(format!("sudo mount -o ro {} /mnt/evidence", device)).cyan()
-        );
+        println!("\nTROUBLESHOOTING:");
+        println!("  1. Check if device exists: lsblk");
+        println!("  2. Check filesystem: sudo blkid {}", device);
+        println!("  3. Try manual mount: sudo mount -o ro {} /mnt/evidence", device);
 
         std::process::exit(1);
     }
 
     println!(
-        "{} Drive mounted successfully at {}",
-        style("✓").green(),
-        style(format!("{}", new_mount_point.display())).bold()
+        "SUCCESS: Drive mounted successfully at {}",
+        new_mount_point.display()
     );
 
     Ok(new_mount_point)
@@ -173,23 +146,13 @@ pub fn is_mounted_readonly(path: &Path) -> color_eyre::Result<bool> {
 pub fn validate_source_path(drive: &str) -> color_eyre::Result<PathBuf> {
     let path = PathBuf::from(drive);
     if !path.exists() {
-        eprintln!(
-            "{} Path does not exist: {}",
-            style("Error:").red().bold(),
-            style(drive).bold()
-        );
+        eprintln!("ERROR: Path does not exist: {}", drive);
         std::process::exit(1);
     }
 
     // Warn if not mounted read-only
     if !is_mounted_readonly(&path)? {
-        println!(
-            "{} {}",
-            style("⚠️").yellow().bold(),
-            style("WARNING: Path is not mounted read-only!")
-                .yellow()
-                .bold()
-        );
+        println!("WARNING: Path is not mounted read-only!");
         println!("   This could potentially modify the evidence.");
 
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
@@ -210,36 +173,23 @@ pub fn unmount_drive(mount_point: &Path, _device: &str) -> color_eyre::Result<()
     // Only unmount if it's a mount point we created
     let mount_point_str = mount_point.to_string_lossy();
     if !mount_point_str.starts_with("/mnt/tap_") {
-        println!(
-            "{} Skipping unmount - not a tap-managed mount point",
-            style("ℹ️").cyan()
-        );
+        println!("INFO: Skipping unmount - not a tap-managed mount point");
         return Ok(());
     }
 
-    println!(
-        "{} Unmounting {}...",
-        style("ℹ️").cyan(),
-        style(mount_point.display()).bold()
-    );
+    println!("INFO: Unmounting {}...", mount_point.display());
 
     let output = Command::new("sudo")
         .args(["umount", mount_point.to_str().unwrap()])
         .output()?;
 
     if !output.status.success() {
-        eprintln!(
-            "{} Failed to unmount drive",
-            style("Warning:").yellow().bold()
-        );
+        eprintln!("WARNING: Failed to unmount drive");
         eprintln!("{}", String::from_utf8_lossy(&output.stderr));
         return Err(color_eyre::eyre::eyre!("Failed to unmount drive"));
     }
 
-    println!(
-        "{} Drive unmounted successfully",
-        style("✓").green()
-    );
+    println!("SUCCESS: Drive unmounted successfully");
 
     // Try to remove the mount point directory
     let output = Command::new("sudo")
@@ -247,10 +197,7 @@ pub fn unmount_drive(mount_point: &Path, _device: &str) -> color_eyre::Result<()
         .output()?;
 
     if output.status.success() {
-        println!(
-            "{} Mount point removed",
-            style("✓").green()
-        );
+        println!("SUCCESS: Mount point removed");
     }
 
     Ok(())

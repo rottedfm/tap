@@ -4,7 +4,7 @@ use tokio::sync::Mutex;
 
 use crate::mount::{mount_drive_readonly, unmount_drive, validate_source_path};
 use crate::scanner::{count_files, scan_directory};
-use crate::tui::{format_size, Mode, UI};
+use crate::tui::{Mode, UI};
 
 pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
     // Check if it's a device or a path
@@ -21,7 +21,7 @@ pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
     ui.init(&Mode::Inspect, &inspect_msg)?;
 
     // Phase 1: Count files
-    ui.print_info("Phase 1: Counting files...")?;
+    ui.print_info("PHASE 1: Counting files...")?;
     let spinner = ui.create_spinner("Scanning drive...");
 
     let total_files = count_files(&source_path).await;
@@ -30,30 +30,24 @@ pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
     ui.print_success(&format!("Found {} files", total_files))?;
 
     // Phase 2: Scan and categorize
-    ui.print_info("Phase 2: Analyzing files...")?;
+    ui.print_info("PHASE 2: Analyzing files...")?;
 
-    let pb = ui.create_progress_bar(total_files, "Scanning");
+    // Draw the recent files section first, then create progress bar below it
     ui.draw_recent_files()?;
+    let pb = ui.create_progress_bar(total_files, "Scanning");
 
-    let update_counter = Arc::new(Mutex::new(0u64));
     let ui_arc = Arc::new(Mutex::new(ui));
 
     let scan_stats = scan_directory(&source_path, {
         let pb = pb.clone();
-        let update_counter = Arc::clone(&update_counter);
         let ui_arc = Arc::clone(&ui_arc);
 
         move |path| {
             pb.inc(1);
 
-            let mut counter = futures::executor::block_on(update_counter.lock());
-            *counter += 1;
-
-            // Update UI every 5 files to reduce flicker
-            if (*counter).is_multiple_of(5) {
-                let mut ui = futures::executor::block_on(ui_arc.lock());
-                let _ = ui.update_recent_files(path);
-            }
+            // Update on every file for realtime display
+            let mut ui = futures::executor::block_on(ui_arc.lock());
+            let _ = ui.update_recent_files(path);
         }
     })
     .await?;
@@ -65,22 +59,29 @@ pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
         .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap UI"))?
         .into_inner();
 
+    // Wait for user to see final scan files
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+    // Clear the recent files section after scan completes
+    ui.term.clear_last_lines(ui.max_recent + 2)?;
+
+    // Clear screen and show clean output
+    ui.term.clear_screen()?;
+
+    // Show banner with mode again for context
+    ui.print_banner_with_mode(&Mode::Inspect)?;
+
     // Display scan results
     let summary = scan_stats.get_summary();
-    ui.print_summary("INSPECTION COMPLETE", &summary)?;
+    ui.print_summary("INSPECTION COMPLETE", &summary, false)?;
 
     if !scan_stats.errors.is_empty() {
+        println!();
         ui.print_warning(&format!(
             "{} errors occurred during scan",
             scan_stats.errors.len()
         ))?;
     }
-
-    ui.print_info(&format!("Total files: {}", scan_stats.total_files))?;
-    ui.print_info(&format!(
-        "Total size: {}",
-        format_size(scan_stats.total_size)
-    ))?;
 
     ui.cleanup()?;
 

@@ -45,6 +45,10 @@ pub enum Commands {
         /// Output directory for organized files
         #[arg(short, long)]
         output_dir: PathBuf,
+
+        /// Create a zip archive of the exported files
+        #[arg(long)]
+        zip: bool,
     },
     // TODO: Discover -- find eleigables and output what is most likely data not boot partitions
 }

@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::Mutex;
+use walkdir::WalkDir;
 
-use console::style;
 use dialoguer::{theme::ColorfulTheme, Confirm};
 
 use crate::log::write_log_file;
@@ -149,13 +149,13 @@ where
 pub async fn handle_export(
     drive: &str,
     output_dir: &Path,
+    should_zip: bool,
 ) -> color_eyre::Result<()> {
     // Check if output directory already exists
     if output_dir.exists() {
         println!(
-            "{} Output directory already exists: {}",
-            style("⚠️").yellow(),
-            style(output_dir.display()).bold()
+            "WARNING: Output directory already exists: {}",
+            output_dir.display()
         );
 
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
@@ -189,7 +189,7 @@ pub async fn handle_export(
     ui.init(&Mode::Export, &mode_message)?;
 
     // Phase 1: Count files
-    ui.print_info("Phase 1: Counting files...")?;
+    ui.print_info("PHASE 1: Counting files...")?;
     let spinner = ui.create_spinner("Scanning drive...");
 
     let total_files = count_files(&source_path).await;
@@ -198,29 +198,23 @@ pub async fn handle_export(
     ui.print_success(&format!("Found {} files", total_files))?;
 
     // Phase 2: Scan and categorize
-    ui.print_info("Phase 2: Analyzing files...")?;
+    ui.print_info("PHASE 2: Analyzing files...")?;
 
-    let pb = ui.create_progress_bar(total_files, "Scanning");
     ui.draw_recent_files()?;
+    let pb = ui.create_progress_bar(total_files, "Scanning");
 
-    let update_counter = Arc::new(Mutex::new(0u64));
     let ui_arc = Arc::new(Mutex::new(ui));
 
     let scan_stats = scan_directory(&source_path, {
         let pb = pb.clone();
-        let update_counter = Arc::clone(&update_counter);
         let ui_arc = Arc::clone(&ui_arc);
 
         move |path| {
             pb.inc(1);
 
-            let mut counter = futures::executor::block_on(update_counter.lock());
-            *counter += 1;
-
-            if (*counter).is_multiple_of(5) {
-                let mut ui = futures::executor::block_on(ui_arc.lock());
-                let _ = ui.update_recent_files(path);
-            }
+            // Update on every file for realtime display
+            let mut ui = futures::executor::block_on(ui_arc.lock());
+            let _ = ui.update_recent_files(path);
         }
     })
     .await?;
@@ -232,41 +226,54 @@ pub async fn handle_export(
         .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap UI"))?
         .into_inner();
 
+    // Wait for user to see final scan files
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    // Clear the recent files section after scan completes
+    ui.term.clear_last_lines(ui.max_recent + 2)?;
+
+    // Clear screen and show clean scan results
+    ui.term.clear_screen()?;
+
+    // Show banner with mode again for context
+    ui.print_banner_with_mode(&Mode::Export)?;
+
     // Display scan results
     let summary = scan_stats.get_summary();
-    ui.print_summary("SCAN RESULTS", &summary)?;
+    ui.print_summary("SCAN RESULTS", &summary, false)?;
 
     if !scan_stats.errors.is_empty() {
+        println!();
         ui.print_warning(&format!(
             "{} errors occurred during scan",
             scan_stats.errors.len()
         ))?;
     }
+    println!();
+
+    // Clear screen before starting copy phase
+    ui.term.clear_screen()?;
+
+    // Show banner with mode again for context
+    ui.print_banner_with_mode(&Mode::Export)?;
 
     // Phase 3: Export
-    ui.print_info("Phase 3: Copying files...")?;
-
-    let pb = ui.create_progress_bar(scan_stats.total_files as u64, "Copying");
+    ui.print_info("PHASE 3: Copying files...")?;
     ui.draw_recent_files()?;
+    let pb = ui.create_progress_bar(scan_stats.total_files as u64, "Copying");
 
-    let update_counter = Arc::new(Mutex::new(0u64));
     let ui_arc = Arc::new(Mutex::new(ui));
 
     let export_stats = export_files(&scan_stats, output_dir, {
         let pb = pb.clone();
-        let update_counter = Arc::clone(&update_counter);
         let ui_arc = Arc::clone(&ui_arc);
 
         move |path| {
             pb.inc(1);
 
-            let mut counter = futures::executor::block_on(update_counter.lock());
-            *counter += 1;
-
-            if (*counter).is_multiple_of(5) {
-                let mut ui = futures::executor::block_on(ui_arc.lock());
-                let _ = ui.update_recent_files(path);
-            }
+            // Update on every file for realtime display
+            let mut ui = futures::executor::block_on(ui_arc.lock());
+            let _ = ui.update_recent_files(path);
         }
     })
     .await?;
@@ -278,11 +285,22 @@ pub async fn handle_export(
         .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap UI"))?
         .into_inner();
 
+    // Wait for user to see final copy files
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
     // Clear the recent files section
     ui.term.clear_last_lines(ui.max_recent + 2)?;
 
-    // Display export results
+    // Clear screen and show clean copy results
+    ui.term.clear_screen()?;
+
+    // Show banner with mode again for context
+    ui.print_banner_with_mode(&Mode::Export)?;
+    println!("COPY RESULTS");
+    println!("{}", "=".repeat(70));
     println!();
+
+    // Display export results
     ui.print_success(&format!(
         "Successfully copied {} files",
         export_stats.copied
@@ -302,15 +320,73 @@ pub async fn handle_export(
     ui.print_info(&format!("Log written to: {}", log_path.display()))?;
     println!();
 
-    // Zip the exported directory
-    ui.print_info("Phase 4: Creating archive...")?;
-    let zip_path = zip_directory(output_dir).await?;
-    ui.print_success(&format!("Archive created: {}", zip_path.display()))?;
+    // Conditionally zip the exported directory
+    if should_zip {
+        // Clear screen before starting zip phase
+        ui.term.clear_screen()?;
 
-    // Remove the original directory
-    println!("{} Removing temporary directory...", style("ℹ️").cyan());
-    tokio::fs::remove_dir_all(output_dir).await?;
-    println!("{} Temporary directory removed", style("✓").green());
+        // Show banner with mode again for context
+        ui.print_banner_with_mode(&Mode::Export)?;
+
+        ui.print_info("PHASE 4: Creating archive...")?;
+
+        // Count files to zip
+        let total_files = WalkDir::new(output_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_file())
+            .count();
+
+        ui.draw_recent_files()?;
+        let pb = ui.create_progress_bar(total_files as u64, "Zipping");
+
+        let ui_arc = Arc::new(Mutex::new(ui));
+
+        let zip_path = zip_directory(
+            output_dir,
+            pb,
+            {
+                let ui_arc = Arc::clone(&ui_arc);
+                move |path| {
+                    let mut ui = futures::executor::block_on(ui_arc.lock());
+                    let _ = ui.update_recent_files(path);
+                }
+            },
+        )
+        .await?;
+
+        // Get UI back
+        ui = Arc::try_unwrap(ui_arc)
+            .map_err(|_| color_eyre::eyre::eyre!("Failed to unwrap UI"))?
+            .into_inner();
+
+        // Wait for user to see final zip files
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        // Clear the recent files section
+        ui.term.clear_last_lines(ui.max_recent + 2)?;
+
+        // Clear screen and show clean zip results
+        ui.term.clear_screen()?;
+
+        // Show banner with mode again for context
+        ui.print_banner_with_mode(&Mode::Export)?;
+        println!("ZIP RESULTS");
+        println!("{}", "=".repeat(70));
+        println!();
+
+        ui.print_success(&format!("Archive created: {}", zip_path.display()))?;
+
+        // Remove the original directory
+        ui.print_info("Removing temporary directory...")?;
+        tokio::fs::remove_dir_all(output_dir).await?;
+        ui.print_success("Temporary directory removed")?;
+    } else {
+        ui.print_success(&format!(
+            "Export complete. Files available at: {}",
+            output_dir.display()
+        ))?;
+    }
 
     ui.cleanup()?;
 

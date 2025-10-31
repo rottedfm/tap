@@ -1,5 +1,5 @@
 // tui.rs
-use console::{style, Term};
+use console::Term;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::VecDeque;
 use std::io;
@@ -53,31 +53,33 @@ impl UI {
         })
     }
 
+    /// Print banner with mode
+    pub fn print_banner_with_mode(&self, mode: &Mode) -> io::Result<()> {
+        // Print banner
+        println!("{}", BANNER);
+        println!();
+        println!("{}", "=".repeat(70));
+
+        // Print mode
+        println!("MODE: {}", mode.as_str());
+
+        println!("{}", "=".repeat(70));
+
+        Ok(())
+    }
+
     /// Init the UI with banner and mode
     pub fn init(&self, mode: &Mode, message: &str) -> io::Result<()> {
         self.term.clear_screen()?;
         self.term.hide_cursor()?;
 
-        // Print banner
-        println!("{}", style(BANNER).white().bold());
-        println!("{}", style("=".repeat(70)).dim());
-        println!();
-
-        // Print mode
-        let mode_styled = match mode {
-            Mode::Inspect => style(format!("Mode: {} MODE", mode.as_str())).blue().bold(),
-            Mode::Export => style(format!("Mode: {} MODE", mode.as_str()))
-                .yellow()
-                .bold(),
-        };
-        println!("{}", mode_styled);
+        self.print_banner_with_mode(mode)?;
 
         if !message.is_empty() {
-            println!("{}", style(message).dim());
+            println!();
+            println!("{}", message);
+            println!();
         }
-
-        println!("{}", style("=".repeat(70)).dim());
-        println!();
 
         Ok(())
     }
@@ -120,16 +122,41 @@ impl UI {
         self.recent_files.push_front(path);
     }
 
-    /// Update recent files list with a new file
+    /// Update recent files list with a new file and redraw the display
     pub fn update_recent_files(&mut self, path: String) -> io::Result<()> {
         self.add_recent_file(path);
+
+        // Move cursor up to the start of the recent files content (not including the header)
+        // We need to move up past: max_recent file lines
+        for _ in 0..self.max_recent {
+            self.term.move_cursor_up(1)?;
+        }
+
+        // Redraw just the file list (not the header), clearing each line as we go
+        for file in &self.recent_files {
+            self.term.clear_line()?;
+            // Truncate long paths to fit screen
+            let display = if file.len() > 65 {
+                format!("  {}...{}", &file[..30], &file[file.len() - 32..])
+            } else {
+                format!("  {}", file)
+            };
+            println!("{}", display);
+        }
+
+        // Fill remaining lines with blanks (clear them)
+        for _ in self.recent_files.len()..self.max_recent {
+            self.term.clear_line()?;
+            println!();
+        }
+
         Ok(())
     }
 
     /// Draw the recent files section
     pub fn draw_recent_files(&self) -> io::Result<()> {
-        println!();
-        println!("{}", style("Currently processing:").bold());
+        println!("{}", "=".repeat(70));
+        println!("RECENT FILES:");
 
         for file in &self.recent_files {
             // Truncate long paths to fit screen
@@ -138,7 +165,7 @@ impl UI {
             } else {
                 format!("  {}", file)
             };
-            println!("{}", style(display).dim());
+            println!("{}", display);
         }
 
         for _ in self.recent_files.len()..self.max_recent {
@@ -149,13 +176,19 @@ impl UI {
     }
 
     /// Print a sumary section with statistics
-    pub fn print_summary(&self, title: &str, stats: &[(String, usize, u64)]) -> io::Result<()> {
-        // Clear recent files section first
-        self.term.clear_last_lines(self.max_recent + 2)?;
+    pub fn print_summary(
+        &self,
+        title: &str,
+        stats: &[(String, usize, u64)],
+        clear_before: bool,
+    ) -> io::Result<()> {
+        // Clear recent files section first if requested
+        if clear_before {
+            self.term.clear_last_lines(self.max_recent + 2)?;
+        }
 
-        println!("{}", style("=".repeat(70)).dim());
-        println!("{}", style(title).green().bold());
-        println!("{}", style("=".repeat(70)).dim());
+        println!();
+        println!("{}", title);
         println!();
 
         let mut total_files = 0;
@@ -166,19 +199,18 @@ impl UI {
             total_size += size;
 
             println!(
-                "  {} {} files ({})",
-                style(format!("{:.<20}", format!("{}:", category))).cyan(),
-                style(count).bold(),
+                "  {:.<20} {} files ({})",
+                format!("{}:", category),
+                count,
                 format_size(*size)
             );
         }
 
         println!();
-        println!("{}", style("-".repeat(70)).dim());
+        println!("{}", "=".repeat(70));
         println!(
-            "  {} {} files ({})",
-            style("Total:".to_string()).bold(),
-            style(total_files).green().bold(),
+            "  TOTAL: {} files ({})",
+            total_files,
             format_size(total_size)
         );
 
@@ -187,29 +219,25 @@ impl UI {
 
     /// Print an info message
     pub fn print_info(&self, message: &str) -> io::Result<()> {
-        println!("{} {}", style("INFO").cyan().bold(), style(message).cyan());
+        println!("INFO: {}", message);
         Ok(())
     }
 
     /// Print an error message
     pub fn print_error(&self, message: &str) -> io::Result<()> {
-        println!("{} {}", style("ERROR").red().bold(), style(message).red());
+        println!("ERROR: {}", message);
         Ok(())
     }
 
     /// Print a success message
     pub fn print_success(&self, message: &str) -> io::Result<()> {
-        println!("{} {}", style("SUCCESS").red().bold(), style(message).red());
+        println!("SUCCESS: {}", message);
         Ok(())
     }
 
     /// Print a warning message
     pub fn print_warning(&self, message: &str) -> io::Result<()> {
-        println!(
-            "{} {}",
-            style("WARNING").yellow().bold(),
-            style(message).yellow()
-        );
+        println!("WARNING: {}", message);
         Ok(())
     }
 

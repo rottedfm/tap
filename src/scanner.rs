@@ -86,10 +86,7 @@ pub async fn count_files(path: &Path) -> u64 {
     result.unwrap_or(0)
 }
 
-pub async fn scan_directory<F>(
-    path: &Path,
-    progress_callback: F,
-) -> color_eyre::Result<ScanStats>
+pub async fn scan_directory<F>(path: &Path, progress_callback: F) -> color_eyre::Result<ScanStats>
 where
     F: Fn(String) + Send + Sync + 'static,
 {
@@ -128,6 +125,9 @@ where
                             // add to stats
                             let mut stats = futures::executor::block_on(stats_clone.lock());
                             stats.add_file(file_info);
+
+                            // Add 1ms delay to show user what is being scanned
+                            std::thread::sleep(std::time::Duration::from_millis(1));
                         }
                         Err(e) => {
                             let mut stats = futures::executor::block_on(stats_clone.lock());
