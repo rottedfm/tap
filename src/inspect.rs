@@ -17,24 +17,24 @@ pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
 
     // Create UI
     let ui = UI::new()?;
-    let inspect_msg = format!("Inspecting: {}", source_path.display());
+    let inspect_msg = format!("Source: {}", source_path.display());
     ui.init(&Mode::Inspect, &inspect_msg)?;
 
     // Phase 1: Count files
-    ui.print_info("PHASE 1: Counting files...")?;
-    let spinner = ui.create_spinner("Scanning drive...");
+    ui.print_info("Phase 1/2: Counting filesystem entries")?;
+    let spinner = ui.create_spinner("Walking directory tree...");
 
     let total_files = count_files(&source_path).await;
 
     spinner.finish_and_clear();
-    ui.print_success(&format!("Found {} files", total_files))?;
+    ui.print_success(&format!("Discovered {} files", total_files))?;
 
     // Phase 2: Scan and categorize
-    ui.print_info("PHASE 2: Analyzing files...")?;
+    ui.print_info("Phase 2/2: Analyzing and categorizing files")?;
 
     // Draw the recent files section first, then create progress bar below it
     ui.draw_recent_files()?;
-    let pb = ui.create_progress_bar(total_files, "Scanning");
+    let pb = ui.create_progress_bar(total_files, "Analyzing");
 
     let ui_arc = Arc::new(Mutex::new(ui));
 
@@ -73,21 +73,29 @@ pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
 
     // Display scan results
     let summary = scan_stats.get_summary();
-    ui.print_summary("INSPECTION COMPLETE", &summary, false)?;
+    let all_files = scan_stats.get_all_files();
+    ui.print_summary(&Mode::Inspect, "INSPECTION COMPLETE", &summary, &all_files, None, false)?;
+
+    // Clear screen for final messages
+    ui.term.clear_screen()?;
+    ui.print_banner_with_mode(&Mode::Inspect)?;
+    println!();
 
     if !scan_stats.errors.is_empty() {
-        println!();
         ui.print_warning(&format!(
-            "{} errors occurred during scan",
+            "{} file(s) skipped due to permission errors or I/O failures",
             scan_stats.errors.len()
         ))?;
+        println!();
     }
+
+    ui.print_success("Inspection complete")?;
+    println!();
 
     ui.cleanup()?;
 
     // Unmount drive if we mounted it
     if is_device {
-        println!();
         unmount_drive(&source_path, drive)?;
     }
 

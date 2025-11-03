@@ -61,6 +61,22 @@ impl ScanStats {
         summary.sort_by(|a, b| b.1.cmp(&a.1)); // Sort by count descending
         summary
     }
+
+    pub fn get_all_files(&self) -> Vec<(String, u64, String)> {
+        self.files_by_category
+            .iter()
+            .flat_map(|(category, files)| {
+                files.iter().map(move |f| {
+                    let name = f.path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    (name, f.size, category.clone())
+                })
+            })
+            .collect()
+    }
 }
 
 pub async fn count_files(path: &Path) -> u64 {
@@ -125,9 +141,6 @@ where
                             // add to stats
                             let mut stats = futures::executor::block_on(stats_clone.lock());
                             stats.add_file(file_info);
-
-                            // Add 1ms delay to show user what is being scanned
-                            std::thread::sleep(std::time::Duration::from_millis(1));
                         }
                         Err(e) => {
                             let mut stats = futures::executor::block_on(stats_clone.lock());

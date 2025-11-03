@@ -16,6 +16,7 @@ use cli::{Args, Commands};
 use device_picker::pick_device;
 use export::handle_export;
 use inspect::handle_inspect;
+use tui::{Mode, UI};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -25,6 +26,9 @@ async fn main() -> color_eyre::Result<()> {
 
     match args.command {
         Commands::Inspect { drive } => {
+            // Check terminal size before device picker
+            UI::check_terminal_size(&Mode::Inspect)?;
+
             let drive_path = match drive {
                 Some(d) => d,
                 None => pick_device()?,
@@ -36,6 +40,9 @@ async fn main() -> color_eyre::Result<()> {
             output_dir,
             zip,
         } => {
+            // Check terminal size before device picker
+            UI::check_terminal_size(&Mode::Export)?;
+
             let drive_path = match drive {
                 Some(d) => d,
                 None => pick_device()?,

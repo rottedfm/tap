@@ -154,17 +154,17 @@ pub async fn handle_export(
     // Check if output directory already exists
     if output_dir.exists() {
         println!(
-            "WARNING: Output directory already exists: {}",
+            "Output directory exists: {}",
             output_dir.display()
         );
 
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Overwrite/merge?")
+            .with_prompt("Merge with existing directory?")
             .default(false)
             .interact()?;
 
         if !should_continue {
-            println!("Aborted.");
+            println!("Operation cancelled.");
             std::process::exit(0);
         }
     }
@@ -181,27 +181,21 @@ pub async fn handle_export(
     let ui = UI::new()?;
 
     let mode_message = format!(
-        "Exporting: {} → {}",
+        "Source: {} → Destination: {}",
         source_path.display(),
         output_dir.display()
     );
 
     ui.init(&Mode::Export, &mode_message)?;
 
-    // Phase 1: Count files
-    ui.print_info("PHASE 1: Counting files...")?;
-    let spinner = ui.create_spinner("Scanning drive...");
+    // Phase 1: Scan and categorize (with counting in background)
+    ui.print_info("Phase 1/3: Scanning and categorizing source files")?;
 
-    let total_files = count_files(&source_path).await;
-
-    spinner.finish_and_clear();
-    ui.print_success(&format!("Found {} files", total_files))?;
-
-    // Phase 2: Scan and categorize
-    ui.print_info("PHASE 2: Analyzing files...")?;
+    // First, do a quick estimate without progress to get a rough count for progress bar
+    let estimated_files = count_files(&source_path).await;
 
     ui.draw_recent_files()?;
-    let pb = ui.create_progress_bar(total_files, "Scanning");
+    let pb = ui.create_progress_bar(estimated_files, "Analyzing");
 
     let ui_arc = Arc::new(Mutex::new(ui));
 
@@ -240,16 +234,8 @@ pub async fn handle_export(
 
     // Display scan results
     let summary = scan_stats.get_summary();
-    ui.print_summary("SCAN RESULTS", &summary, false)?;
-
-    if !scan_stats.errors.is_empty() {
-        println!();
-        ui.print_warning(&format!(
-            "{} errors occurred during scan",
-            scan_stats.errors.len()
-        ))?;
-    }
-    println!();
+    let all_files = scan_stats.get_all_files();
+    ui.print_summary(&Mode::Export, "SCAN RESULTS", &summary, &all_files, None, false)?;
 
     // Clear screen before starting copy phase
     ui.term.clear_screen()?;
@@ -257,8 +243,8 @@ pub async fn handle_export(
     // Show banner with mode again for context
     ui.print_banner_with_mode(&Mode::Export)?;
 
-    // Phase 3: Export
-    ui.print_info("PHASE 3: Copying files...")?;
+    // Phase 2: Export
+    ui.print_info("Phase 2/3: Copying files to destination")?;
     ui.draw_recent_files()?;
     let pb = ui.create_progress_bar(scan_stats.total_files as u64, "Copying");
 
@@ -296,28 +282,32 @@ pub async fn handle_export(
 
     // Show banner with mode again for context
     ui.print_banner_with_mode(&Mode::Export)?;
-    println!("COPY RESULTS");
-    println!("{}", "=".repeat(70));
+
+    // Display scan results using the same format as inspect
+    let summary = scan_stats.get_summary();
+    let all_files = scan_stats.get_all_files();
+    ui.print_summary(&Mode::Export, "COPY COMPLETE", &summary, &all_files, None, false)?;
+
+    // Clear screen for post-summary messages
+    ui.term.clear_screen()?;
+    ui.print_banner_with_mode(&Mode::Export)?;
     println!();
 
-    // Display export results
-    ui.print_success(&format!(
-        "Successfully copied {} files",
-        export_stats.copied
-    ))?;
-
+    // Display export errors if any
     if export_stats.failed > 0 {
-        ui.print_error(&format!("Failed to copy {} files", export_stats.failed))?;
+        ui.print_error(&format!("{} file(s) failed to copy (permission denied or I/O error)", export_stats.failed))?;
+        println!();
     }
 
     if !export_stats.errors.is_empty() {
-        ui.print_warning("Check log file for error details")?;
+        ui.print_warning("See log file for detailed error information")?;
+        println!();
     }
 
     // Write log file
     write_log_file(output_dir, &scan_stats, &export_stats).await?;
     let log_path = output_dir.join("tap.log");
-    ui.print_info(&format!("Log written to: {}", log_path.display()))?;
+    ui.print_info(&format!("Log file: {}", log_path.display()))?;
     println!();
 
     // Conditionally zip the exported directory
@@ -328,7 +318,7 @@ pub async fn handle_export(
         // Show banner with mode again for context
         ui.print_banner_with_mode(&Mode::Export)?;
 
-        ui.print_info("PHASE 4: Creating archive...")?;
+        ui.print_info("Phase 3/3: Compressing to archive")?;
 
         // Count files to zip
         let total_files = WalkDir::new(output_dir)
@@ -338,7 +328,7 @@ pub async fn handle_export(
             .count();
 
         ui.draw_recent_files()?;
-        let pb = ui.create_progress_bar(total_files as u64, "Zipping");
+        let pb = ui.create_progress_bar(total_files as u64, "Archiving");
 
         let ui_arc = Arc::new(Mutex::new(ui));
 
@@ -371,28 +361,37 @@ pub async fn handle_export(
 
         // Show banner with mode again for context
         ui.print_banner_with_mode(&Mode::Export)?;
-        println!("ZIP RESULTS");
-        println!("{}", "=".repeat(70));
+
+        // Display scan results using the same format as inspect
+        let summary = scan_stats.get_summary();
+        let all_files = scan_stats.get_all_files();
+        ui.print_summary(&Mode::Export, "ZIP COMPLETE", &summary, &all_files, None, false)?;
+
+        // Clear screen for final messages
+        ui.term.clear_screen()?;
+        ui.print_banner_with_mode(&Mode::Export)?;
         println!();
 
         ui.print_success(&format!("Archive created: {}", zip_path.display()))?;
+        println!();
 
         // Remove the original directory
-        ui.print_info("Removing temporary directory...")?;
+        ui.print_info("Removing temporary directory")?;
         tokio::fs::remove_dir_all(output_dir).await?;
-        ui.print_success("Temporary directory removed")?;
+        ui.print_success("Cleanup complete")?;
+        println!();
     } else {
         ui.print_success(&format!(
-            "Export complete. Files available at: {}",
+            "Export complete: {}",
             output_dir.display()
         ))?;
+        println!();
     }
 
     ui.cleanup()?;
 
     // Unmount drive if we mounted it
     if is_device {
-        println!();
         unmount_drive(&source_path, drive)?;
     }
 
