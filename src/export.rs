@@ -1,4 +1,9 @@
-// src/export.rs
+  //! File export and copy operations.
+//!
+//! This module handles exporting files from a source location to a destination,
+//! organizing them by category. It supports concurrent file operations for
+//! performance and provides detailed progress tracking.
+
 use futures::stream::{self, StreamExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -6,23 +11,33 @@ use tokio::fs;
 use tokio::sync::Mutex;
 use walkdir::WalkDir;
 
-use dialoguer::{theme::ColorfulTheme, Confirm};
+use dialoguer::Confirm;
 
+use crate::config::Config;
 use crate::log::write_log_file;
 use crate::mount::{mount_drive_readonly, unmount_drive, validate_source_path};
 use crate::scanner::{count_files, scan_directory, ScanStats};
 use crate::tui::{Mode, UI};
 use crate::zip::zip_directory;
 
-const MAX_CONCURRENT_COPIES: usize = 10;
-
+/// Statistics about an export operation.
+///
+/// Tracks the number of files successfully copied, failed copies,
+/// and detailed error messages.
 pub struct ExportStats {
     pub copied: usize,
     pub failed: usize,
     pub errors: Vec<String>,
 }
 
+impl Default for ExportStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExportStats {
+    /// Creates a new empty `ExportStats` instance.
     pub fn new() -> Self {
         Self {
             copied: 0,
@@ -101,7 +116,10 @@ where
         })
         .collect();
 
-    // Copy files concurrently with limited parallelism
+    // Copy files concurrently with limited parallelism (using default of 10)
+    // Note: This could be configurable via Config in the future
+    const MAX_CONCURRENT_COPIES: usize = 10;
+
     stream::iter(all_files)
         .map(|(category, file_info)| {
             let dest_base = dest_base.to_path_buf();
@@ -150,21 +168,26 @@ pub async fn handle_export(
     drive: &str,
     output_dir: &Path,
     should_zip: bool,
+    config: &Config,
 ) -> color_eyre::Result<()> {
     // Check if output directory already exists
     if output_dir.exists() {
+        use console::Style;
+        let white_bold = Style::new().white().bold();
+
         println!(
-            "Output directory exists: {}",
-            output_dir.display()
+            "{}",
+            white_bold.apply_to(format!("Output directory exists: {}", output_dir.display()))
         );
 
-        let should_continue = Confirm::with_theme(&ColorfulTheme::default())
+        let theme = UI::get_colorful_theme(&config.ui.color.theme);
+        let should_continue = Confirm::with_theme(&theme)
             .with_prompt("Merge with existing directory?")
             .default(false)
             .interact()?;
 
         if !should_continue {
-            println!("Operation cancelled.");
+            println!("{}", white_bold.apply_to("Operation cancelled."));
             std::process::exit(0);
         }
     }
@@ -172,13 +195,13 @@ pub async fn handle_export(
     // Check if it's a device or a path
     let is_device = drive.starts_with("/dev/");
     let source_path = if is_device {
-        mount_drive_readonly(drive).await?
+        mount_drive_readonly(drive, &config.ui.color.theme).await?
     } else {
-        validate_source_path(drive)?
+        validate_source_path(drive, &config.ui.color.theme)?
     };
 
-    // Create UI
-    let ui = UI::new()?;
+    // Create UI with color theme from config
+    let ui = UI::new()?.with_color_theme(config.ui.color.theme.clone());
 
     let mode_message = format!(
         "Source: {} → Destination: {}",
@@ -392,7 +415,7 @@ pub async fn handle_export(
 
     // Unmount drive if we mounted it
     if is_device {
-        unmount_drive(&source_path, drive)?;
+        unmount_drive(&source_path, drive, &config.ui.color.theme)?;
     }
 
     Ok(())

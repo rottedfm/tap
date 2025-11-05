@@ -1,10 +1,19 @@
-// config.rs
+//! Configuration management for TAP.
+//!
+//! This module handles loading and saving configuration from/to TOML files.
+//! Configuration includes file categorization rules, export settings, UI preferences,
+//! and more. On first run, a default configuration is automatically created.
+
 use color_eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+/// Main configuration structure for TAP.
+///
+/// Contains all configurable settings including file categories, export options,
+/// compression settings, UI preferences, and mount configurations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub categories: HashMap<String, Vec<String>>,
@@ -15,28 +24,44 @@ pub struct Config {
     pub mount: MountConfig,
 }
 
+/// Export operation configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportConfig {
+    /// Maximum number of concurrent file copy operations
     pub max_concurrent_copies: usize,
 }
 
+/// ZIP archive configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZipConfig {
     pub enabled: bool,
     pub compression_level: u8,
+    /// Buffer size in kilobytes for ZIP operations
     pub buffer_size_kb: usize,
 }
 
+/// User interface configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UIConfig {
     pub max_recent_files: usize,
+    pub color: ColorConfig,
 }
 
+/// Color theme configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColorConfig {
+    /// Theme name: "default", "cyan", "magenta", "yellow", "green", "red", "blue", "white"
+    pub theme: String,
+}
+
+/// Directory scanning configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanConfig {
+    /// Directory and file patterns to exclude from scanning
     pub exclude_patterns: Vec<String>,
 }
 
+/// Drive mounting configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MountConfig {
     pub mount_base_dir: String,
@@ -411,6 +436,9 @@ impl Default for Config {
             },
             ui: UIConfig {
                 max_recent_files: 10,
+                color: ColorConfig {
+                    theme: "default".to_string(),
+                },
             },
             scan: ScanConfig {
                 exclude_patterns: vec![
@@ -435,7 +463,13 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Get the config directory path
+    /// Returns the configuration directory path.
+    ///
+    /// Typically `~/.config/tap` on Unix systems or `%USERPROFILE%/.config/tap` on Windows.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the home directory cannot be determined.
     fn get_config_dir() -> Result<PathBuf> {
         let home = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
@@ -444,12 +478,41 @@ impl Config {
         Ok(PathBuf::from(home).join(".config").join("tap"))
     }
 
-    /// Get the config file path
+    /// Returns the configuration file path.
+    ///
+    /// Typically `~/.config/tap/config.toml`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configuration directory path cannot be determined.
     fn get_config_path() -> Result<PathBuf> {
         Ok(Self::get_config_dir()?.join("config.toml"))
     }
 
-    /// Load config from file, creating default if it doesn't exist
+    /// Loads configuration from file, creating default if it doesn't exist.
+    ///
+    /// If the configuration file doesn't exist, this function creates a default
+    /// configuration and saves it to disk.
+    ///
+    /// # Returns
+    ///
+    /// The loaded or newly created configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if file I/O fails or if the TOML is malformed.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use tap::config::Config;
+    ///
+    /// # fn main() -> color_eyre::Result<()> {
+    /// let config = Config::load()?;
+    /// println!("Using theme: {}", config.ui.color.theme);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn load() -> Result<Self> {
         let config_path = Self::get_config_path()?;
 
@@ -467,7 +530,13 @@ impl Config {
         Ok(config)
     }
 
-    /// Save config to file
+    /// Saves the configuration to file.
+    ///
+    /// Creates the configuration directory if it doesn't exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if file I/O fails or if serialization fails.
     pub fn save(&self) -> Result<()> {
         let config_dir = Self::get_config_dir()?;
         fs::create_dir_all(&config_dir)?;
@@ -478,25 +547,178 @@ impl Config {
 
         Ok(())
     }
+}
 
-    /// Get category for a file extension
-    pub fn get_category(&self, extension: &str) -> String {
-        let ext = extension.to_lowercase();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        for (category, extensions) in self.categories.iter() {
-            if extensions.iter().any(|e| e == &ext) {
-                return category.clone();
-            }
-        }
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
 
-        "misc".to_string()
+        // Test categories exist
+        assert!(config.categories.contains_key("images"));
+        assert!(config.categories.contains_key("documents"));
+        assert!(config.categories.contains_key("videos"));
+        assert!(config.categories.contains_key("audio"));
+
+        // Test export config
+        assert_eq!(config.export.max_concurrent_copies, 10);
+
+        // Test zip config
+        assert_eq!(config.zip.enabled, true);
+        assert_eq!(config.zip.compression_level, 6);
+        assert_eq!(config.zip.buffer_size_kb, 256);
+
+        // Test UI config
+        assert_eq!(config.ui.max_recent_files, 10);
+        assert_eq!(config.ui.color.theme, "default");
+
+        // Test scan config
+        assert!(config.scan.exclude_patterns.contains(&".*".to_string()));
+        assert!(config.scan.exclude_patterns.contains(&"node_modules".to_string()));
+
+        // Test mount config
+        assert_eq!(config.mount.mount_base_dir, "/mnt");
+        assert_eq!(config.mount.mount_prefix, "tap_");
     }
 
-    /// Get extension from a file path
-    pub fn get_extension(path: &std::path::Path) -> String {
-        path.extension()
-            .and_then(|s| s.to_str())
-            .map(|s| format!(".{}", s.to_lowercase()))
-            .unwrap_or_default()
+    #[test]
+    fn test_config_categories_comprehensive() {
+        let config = Config::default();
+
+        // Verify comprehensive category coverage
+        let expected_categories = vec![
+            "images", "documents", "presentations", "spreadsheets",
+            "databases", "email", "notes", "publishing", "diagrams",
+            "project_files", "videos", "audio", "archives", "executables",
+            "code", "config", "fonts", "three_d", "ebooks", "backups",
+            "system", "virtual", "logs", "certificates", "web",
+            "subtitles", "torrents"
+        ];
+
+        for category in expected_categories {
+            assert!(config.categories.contains_key(category),
+                    "Missing category: {}", category);
+        }
+    }
+
+    #[test]
+    fn test_config_image_extensions() {
+        let config = Config::default();
+        let images = &config.categories["images"];
+
+        // Common image formats
+        assert!(images.contains(&".jpg".to_string()));
+        assert!(images.contains(&".jpeg".to_string()));
+        assert!(images.contains(&".png".to_string()));
+        assert!(images.contains(&".gif".to_string()));
+
+        // Modern formats
+        assert!(images.contains(&".webp".to_string()));
+        assert!(images.contains(&".heic".to_string()));
+
+        // RAW formats
+        assert!(images.contains(&".raw".to_string()));
+        assert!(images.contains(&".cr2".to_string()));
+    }
+
+    #[test]
+    fn test_config_document_extensions() {
+        let config = Config::default();
+        let docs = &config.categories["documents"];
+
+        // Microsoft Office
+        assert!(docs.contains(&".doc".to_string()));
+        assert!(docs.contains(&".docx".to_string()));
+
+        // PDF
+        assert!(docs.contains(&".pdf".to_string()));
+
+        // Text formats
+        assert!(docs.contains(&".txt".to_string()));
+        assert!(docs.contains(&".md".to_string()));
+    }
+
+    #[test]
+    fn test_config_code_extensions() {
+        let config = Config::default();
+        let code = &config.categories["code"];
+
+        // Common languages
+        assert!(code.contains(&".py".to_string()));
+        assert!(code.contains(&".js".to_string()));
+        assert!(code.contains(&".rs".to_string()));
+        assert!(code.contains(&".java".to_string()));
+        assert!(code.contains(&".cpp".to_string()));
+
+        // Web development
+        assert!(code.contains(&".html".to_string()));
+        assert!(code.contains(&".css".to_string()));
+    }
+
+    #[test]
+    fn test_export_config() {
+        let config = ExportConfig {
+            max_concurrent_copies: 20,
+        };
+
+        assert_eq!(config.max_concurrent_copies, 20);
+    }
+
+    #[test]
+    fn test_zip_config() {
+        let config = ZipConfig {
+            enabled: true,
+            compression_level: 9,
+            buffer_size_kb: 512,
+        };
+
+        assert_eq!(config.enabled, true);
+        assert_eq!(config.compression_level, 9);
+        assert_eq!(config.buffer_size_kb, 512);
+    }
+
+    #[test]
+    fn test_ui_config() {
+        let config = UIConfig {
+            max_recent_files: 20,
+            color: ColorConfig {
+                theme: "cyan".to_string(),
+            },
+        };
+
+        assert_eq!(config.max_recent_files, 20);
+        assert_eq!(config.color.theme, "cyan");
+    }
+
+    #[test]
+    fn test_scan_config() {
+        let config = ScanConfig {
+            exclude_patterns: vec![
+                ".*".to_string(),
+                "node_modules".to_string(),
+            ],
+        };
+
+        assert_eq!(config.exclude_patterns.len(), 2);
+        assert!(config.exclude_patterns.contains(&".*".to_string()));
+    }
+
+    #[test]
+    fn test_mount_config() {
+        let config = MountConfig {
+            mount_base_dir: "/mnt".to_string(),
+            mount_prefix: "tap_".to_string(),
+            device_patterns: vec![
+                "/dev/sd".to_string(),
+                "/dev/nvme".to_string(),
+            ],
+        };
+
+        assert_eq!(config.mount_base_dir, "/mnt");
+        assert_eq!(config.mount_prefix, "tap_");
+        assert_eq!(config.device_patterns.len(), 2);
     }
 }

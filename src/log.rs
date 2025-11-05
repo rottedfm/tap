@@ -1,4 +1,8 @@
-// src/log.rs
+//! Log file generation.
+//!
+//! This module creates detailed log files documenting scan and export operations,
+//! including statistics, errors, and file categorization summaries.
+
 use std::path::Path;
 use tokio::io::AsyncWriteExt;
 

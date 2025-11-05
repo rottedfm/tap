@@ -1,5 +1,10 @@
-// tui.rs
+//! Terminal user interface components.
+//!
+//! This module provides a rich terminal UI with progress tracking, themed colors,
+//! navigation, and various visualization components for file statistics.
+
 use console::Term;
+use dialoguer::theme::{ColorfulTheme, Theme};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::VecDeque;
 use std::io;
@@ -40,6 +45,7 @@ pub struct UI {
     pub term: Term,
     recent_files: VecDeque<String>,
     pub max_recent: usize,
+    pub color_theme: String,
 }
 
 impl UI {
@@ -49,12 +55,292 @@ impl UI {
             term,
             recent_files: VecDeque::with_capacity(10),
             max_recent: 10,
+            color_theme: "default".to_string(),
         })
     }
 
+    pub fn with_color_theme(mut self, theme: String) -> Self {
+        self.color_theme = theme;
+        self
+    }
+
+    /// Get the console::Style for the configured theme
+    fn get_style(&self) -> console::Style {
+        use console::Style;
+
+        match self.color_theme.as_str() {
+            "cyan" => Style::new().cyan(),
+            "magenta" => Style::new().magenta(),
+            "yellow" => Style::new().yellow(),
+            "green" => Style::new().green(),
+            "red" => Style::new().red(),
+            "blue" => Style::new().blue(),
+            "white" => Style::new().white(),
+            _ => Style::new().white(),
+        }
+    }
+
+    /// Get different shades for status codes based on theme
+    /// Returns (info_style, warning_style, error_style, success_style)
+    fn get_status_styles(&self) -> (console::Style, console::Style, console::Style, console::Style) {
+        use console::Style;
+
+        match self.color_theme.as_str() {
+            "cyan" => (
+                Style::new().cyan(),           // info - base
+                Style::new().color256(51),     // warning - bright cyan
+                Style::new().color256(87),     // error - darker cyan
+                Style::new().color256(123),    // success - lighter cyan
+            ),
+            "magenta" => (
+                Style::new().magenta(),        // info - base
+                Style::new().color256(201),    // warning - bright magenta
+                Style::new().color256(126),    // error - darker magenta
+                Style::new().color256(213),    // success - lighter magenta
+            ),
+            "yellow" => (
+                Style::new().yellow(),         // info - base
+                Style::new().color256(226),    // warning - bright yellow
+                Style::new().color256(178),    // error - darker yellow/orange
+                Style::new().color256(227),    // success - lighter yellow
+            ),
+            "green" => (
+                Style::new().green(),          // info - base
+                Style::new().color256(46),     // warning - bright green
+                Style::new().color256(28),     // error - darker green
+                Style::new().color256(120),    // success - lighter green
+            ),
+            "red" => (
+                Style::new().red(),            // info - base
+                Style::new().color256(196),    // warning - bright red
+                Style::new().color256(124),    // error - darker red
+                Style::new().color256(210),    // success - lighter red/pink
+            ),
+            "blue" => (
+                Style::new().blue(),           // info - base
+                Style::new().color256(39),     // warning - bright blue
+                Style::new().color256(25),     // error - darker blue
+                Style::new().color256(117),    // success - lighter blue
+            ),
+            "white" => (
+                Style::new().white(),          // info - base
+                Style::new().color256(255),    // warning - bright white
+                Style::new().color256(250),    // error - darker white/gray
+                Style::new().color256(255),    // success - bright white
+            ),
+            _ => (
+                Style::new().white(),
+                Style::new().color256(255),
+                Style::new().color256(250),
+                Style::new().color256(255),
+            ),
+        }
+    }
+
+    /// Get spinner color string for progress bar templates
+    fn get_spinner_color(&self) -> &str {
+        match self.color_theme.as_str() {
+            "cyan" => ".cyan",
+            "magenta" => ".magenta",
+            "yellow" => ".yellow",
+            "green" => ".green",
+            "red" => ".red",
+            "blue" => ".blue",
+            "white" => ".white",
+            _ => ".white",
+        }
+    }
+
+    /// Get bar colors (spinner_color, bar_color) for progress bar templates
+    fn get_bar_colors(&self) -> (&str, &str) {
+        match self.color_theme.as_str() {
+            "cyan" => (".cyan", "bright_cyan/bright_cyan"),
+            "magenta" => (".magenta", "bright_magenta/bright_magenta"),
+            "yellow" => (".yellow", "bright_yellow/bright_yellow"),
+            "green" => (".green", "bright_green/bright_green"),
+            "red" => (".red", "bright_red/bright_red"),
+            "blue" => (".blue", "bright_blue/bright_blue"),
+            "white" => (".white", "bright_white/bright_white"),
+            _ => (".white", "bright_white/bright_white"),
+        }
+    }
+
+    /// Create a themed ColorfulTheme based on the configured color
+    fn get_theme(&self) -> Box<dyn Theme> {
+        use console::{style, Style};
+
+        match self.color_theme.as_str() {
+            "cyan" => Box::new(ColorfulTheme {
+                values_style: Style::new().cyan(),
+                active_item_style: Style::new().cyan().bold(),
+                active_item_prefix: style("❯".to_string()).cyan().bold(),
+                ..ColorfulTheme::default()
+            }),
+            "magenta" => Box::new(ColorfulTheme {
+                values_style: Style::new().magenta(),
+                active_item_style: Style::new().magenta().bold(),
+                active_item_prefix: style("❯".to_string()).magenta().bold(),
+                ..ColorfulTheme::default()
+            }),
+            "yellow" => Box::new(ColorfulTheme {
+                values_style: Style::new().yellow(),
+                active_item_style: Style::new().yellow().bold(),
+                active_item_prefix: style("❯".to_string()).yellow().bold(),
+                ..ColorfulTheme::default()
+            }),
+            "green" => Box::new(ColorfulTheme {
+                values_style: Style::new().green(),
+                active_item_style: Style::new().green().bold(),
+                active_item_prefix: style("❯".to_string()).green().bold(),
+                ..ColorfulTheme::default()
+            }),
+            "red" => Box::new(ColorfulTheme {
+                values_style: Style::new().red(),
+                active_item_style: Style::new().red().bold(),
+                active_item_prefix: style("❯".to_string()).red().bold(),
+                ..ColorfulTheme::default()
+            }),
+            "blue" => Box::new(ColorfulTheme {
+                values_style: Style::new().blue(),
+                active_item_style: Style::new().blue().bold(),
+                active_item_prefix: style("❯".to_string()).blue().bold(),
+                ..ColorfulTheme::default()
+            }),
+            "white" => Box::new(ColorfulTheme {
+                values_style: Style::new().white(),
+                active_item_style: Style::new().white().bold(),
+                active_item_prefix: style("❯".to_string()).white().bold(),
+                ..ColorfulTheme::default()
+            }),
+            _ => Box::new(ColorfulTheme::default()),
+        }
+    }
+
+    /// Get a static ColorfulTheme based on theme string for use in static contexts
+    pub fn get_colorful_theme(theme: &str) -> ColorfulTheme {
+        use console::{style, Style};
+
+        match theme {
+            "cyan" => ColorfulTheme {
+                values_style: Style::new().cyan(),
+                active_item_style: Style::new().cyan().bold(),
+                active_item_prefix: style("❯".to_string()).cyan().bold(),
+                ..ColorfulTheme::default()
+            },
+            "magenta" => ColorfulTheme {
+                values_style: Style::new().magenta(),
+                active_item_style: Style::new().magenta().bold(),
+                active_item_prefix: style("❯".to_string()).magenta().bold(),
+                ..ColorfulTheme::default()
+            },
+            "yellow" => ColorfulTheme {
+                values_style: Style::new().yellow(),
+                active_item_style: Style::new().yellow().bold(),
+                active_item_prefix: style("❯".to_string()).yellow().bold(),
+                ..ColorfulTheme::default()
+            },
+            "green" => ColorfulTheme {
+                values_style: Style::new().green(),
+                active_item_style: Style::new().green().bold(),
+                active_item_prefix: style("❯".to_string()).green().bold(),
+                ..ColorfulTheme::default()
+            },
+            "red" => ColorfulTheme {
+                values_style: Style::new().red(),
+                active_item_style: Style::new().red().bold(),
+                active_item_prefix: style("❯".to_string()).red().bold(),
+                ..ColorfulTheme::default()
+            },
+            "blue" => ColorfulTheme {
+                values_style: Style::new().blue(),
+                active_item_style: Style::new().blue().bold(),
+                active_item_prefix: style("❯".to_string()).blue().bold(),
+                ..ColorfulTheme::default()
+            },
+            "white" => ColorfulTheme {
+                values_style: Style::new().white(),
+                active_item_style: Style::new().white().bold(),
+                active_item_prefix: style("❯".to_string()).white().bold(),
+                ..ColorfulTheme::default()
+            },
+            _ => ColorfulTheme::default(),
+        }
+    }
+
+    /// Get static status styles based on theme string
+    /// Returns (info_style, warning_style, error_style, success_style)
+    pub fn get_static_status_styles(theme: &str) -> (console::Style, console::Style, console::Style, console::Style) {
+        use console::Style;
+
+        match theme {
+            "cyan" => (
+                Style::new().cyan(),           // info - base
+                Style::new().color256(51),     // warning - bright cyan
+                Style::new().color256(87),     // error - darker cyan
+                Style::new().color256(123),    // success - lighter cyan
+            ),
+            "magenta" => (
+                Style::new().magenta(),        // info - base
+                Style::new().color256(201),    // warning - bright magenta
+                Style::new().color256(126),    // error - darker magenta
+                Style::new().color256(213),    // success - lighter magenta
+            ),
+            "yellow" => (
+                Style::new().yellow(),         // info - base
+                Style::new().color256(226),    // warning - bright yellow
+                Style::new().color256(178),    // error - darker yellow/orange
+                Style::new().color256(227),    // success - lighter yellow
+            ),
+            "green" => (
+                Style::new().green(),          // info - base
+                Style::new().color256(46),     // warning - bright green
+                Style::new().color256(28),     // error - darker green
+                Style::new().color256(120),    // success - lighter green
+            ),
+            "red" => (
+                Style::new().red(),            // info - base
+                Style::new().color256(196),    // warning - bright red
+                Style::new().color256(124),    // error - darker red
+                Style::new().color256(210),    // success - lighter red/pink
+            ),
+            "blue" => (
+                Style::new().blue(),           // info - base
+                Style::new().color256(39),     // warning - bright blue
+                Style::new().color256(25),     // error - darker blue
+                Style::new().color256(117),    // success - lighter blue
+            ),
+            "white" => (
+                Style::new().white(),          // info - base
+                Style::new().color256(255),    // warning - bright white
+                Style::new().color256(250),    // error - darker white/gray
+                Style::new().color256(255),    // success - bright white
+            ),
+            _ => (
+                Style::new().white(),
+                Style::new().color256(255),
+                Style::new().color256(250),
+                Style::new().color256(255),
+            ),
+        }
+    }
+
     /// Check terminal size and wait for resize if insufficient
-    pub fn check_terminal_size(mode: &Mode) -> io::Result<()> {
+    pub fn check_terminal_size(mode: &Mode, theme: &str) -> io::Result<()> {
+        use console::Style;
+
         let term = Term::stdout();
+
+        // Get style for theme
+        let style = match theme {
+            "cyan" => Style::new().cyan(),
+            "magenta" => Style::new().magenta(),
+            "yellow" => Style::new().yellow(),
+            "green" => Style::new().green(),
+            "red" => Style::new().red(),
+            "blue" => Style::new().blue(),
+            "white" => Style::new().white(),
+            _ => Style::new().white(),
+        };
 
         // Calculate space requirements
         const REQUIRED_WIDTH: usize = 115;
@@ -76,24 +362,27 @@ impl UI {
                 break;
             }
 
+            use console::Style;
+            let white_bold = Style::new().white().bold();
+
             term.clear_screen()?;
-            Self::print_banner_with_mode_static(mode)?;
+            Self::print_banner_with_mode_static(mode, &style)?;
             println!();
-            Self::print_warning_static("Terminal size insufficient for displaying content!")?;
+            Self::print_warning_static("Terminal size insufficient for displaying content!", &style)?;
             println!();
 
             if !width_ok {
-                println!("  Width:  {} columns (minimum: {} required)", cols, REQUIRED_WIDTH);
+                println!("{}", white_bold.apply_to(format!("  Width:  {} columns (minimum: {} required)", cols, REQUIRED_WIDTH)));
             }
             if !height_ok {
-                println!("  Height: {} rows (minimum: {} required)", rows, required_height);
+                println!("{}", white_bold.apply_to(format!("  Height: {} rows (minimum: {} required)", rows, required_height)));
             }
 
             println!();
-            println!("Please resize your terminal window to continue...");
+            println!("{}", white_bold.apply_to("Please resize your terminal window to continue..."));
             println!();
-            println!("TIP: The pie chart visualization requires extra width to display");
-            println!("     category names, bars, percentages, sizes, and statistics.");
+            println!("{}", white_bold.apply_to("TIP: The pie chart visualization requires extra width to display"));
+            println!("{}", white_bold.apply_to("     category names, bars, percentages, sizes, and statistics."));
 
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
@@ -102,43 +391,61 @@ impl UI {
     }
 
     /// Static version of print_banner_with_mode for early checks
-    fn print_banner_with_mode_static(mode: &Mode) -> io::Result<()> {
+    fn print_banner_with_mode_static(mode: &Mode, style: &console::Style) -> io::Result<()> {
+        use console::Style;
+        let white_bold = Style::new().white().bold();
+
         // Print banner
-        println!("{}", BANNER);
+        println!("{}", style.apply_to(BANNER).bold());
         println!();
-        println!("{}", "=".repeat(70));
+        println!("{}", white_bold.apply_to("=".repeat(70)));
 
-        // Print mode
-        println!("MODE: {}", mode.as_str());
+        // Print mode - "MODE:" is themed and bold, mode name is white, bold, and italic
+        println!("{} {}",
+            style.apply_to("MODE:").bold(),
+            white_bold.apply_to(mode.as_str()).italic()
+        );
 
-        println!("{}", "=".repeat(70));
+        println!("{}", white_bold.apply_to("=".repeat(70)));
 
         Ok(())
     }
 
     /// Static version of print_warning for early checks
-    fn print_warning_static(message: &str) -> io::Result<()> {
-        println!("[!] WARNING: {}", message);
+    fn print_warning_static(message: &str, style: &console::Style) -> io::Result<()> {
+        use console::Style;
+        let white_bold = Style::new().white().bold();
+        println!("{} {}", style.apply_to("[!] WARNING:").bold(), white_bold.apply_to(message));
         Ok(())
     }
 
     /// Print banner with mode
     pub fn print_banner_with_mode(&self, mode: &Mode) -> io::Result<()> {
+        use console::Style;
+        let style = self.get_style();
+        let white_bold = Style::new().white().bold();
+
         // Print banner
-        println!("{}", BANNER);
+        println!("{}", style.apply_to(BANNER).bold());
         println!();
-        println!("{}", "=".repeat(70));
+        println!("{}", white_bold.apply_to("=".repeat(70)));
 
-        // Print mode
-        println!("MODE: {}", mode.as_str());
+        // Print mode - "MODE:" is themed and bold, mode name is white, bold, and italic
+        println!("{} {}",
+            style.apply_to("MODE:").bold(),
+            white_bold.apply_to(mode.as_str()).italic()
+        );
 
-        println!("{}", "=".repeat(70));
+        println!("{}", white_bold.apply_to("=".repeat(70)));
 
         Ok(())
     }
 
     /// Init the UI with banner and mode
     pub fn init(&self, mode: &Mode, message: &str) -> io::Result<()> {
+        use console::Style;
+        let white_bold = Style::new().white().bold();
+
         self.term.clear_screen()?;
         self.term.hide_cursor()?;
 
@@ -146,7 +453,7 @@ impl UI {
 
         if !message.is_empty() {
             println!();
-            println!("{}", message);
+            println!("{}", white_bold.apply_to(message));
             println!();
         }
 
@@ -156,9 +463,10 @@ impl UI {
     /// Create a progress bar for counting/scanning
     pub fn create_spinner(&self, message: &str) -> ProgressBar {
         let pb = ProgressBar::new_spinner();
+        let spinner_color = self.get_spinner_color();
         pb.set_style(
             ProgressStyle::default_spinner()
-                .template("{spinner:.white} {msg}")
+                .template(&format!("{{spinner:{}}} {{msg}}", spinner_color))
                 .unwrap()
                 .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
         );
@@ -170,9 +478,10 @@ impl UI {
     /// create a progess bar with known total
     pub fn create_progress_bar(&self, total: u64, message: &str) -> ProgressBar {
         let pb = ProgressBar::new(total);
+        let (spinner_color, bar_color) = self.get_bar_colors();
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.white} {bar:40.bright_white/bright_white} {pos}/{len} ({percent}%) {msg}")
+                .template(&format!("{{spinner:{}}} {{bar:40.{}/{}}} {{pos}}/{{len}} ({{percent}}%) {{msg}}", spinner_color, bar_color, bar_color))
                 .unwrap()
                 .progress_chars("█ ")
                 .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
@@ -193,6 +502,9 @@ impl UI {
 
     /// Update recent files list with a new file and redraw the display
     pub fn update_recent_files(&mut self, path: String) -> io::Result<()> {
+        use console::Style;
+        let white_bold = Style::new().white().bold();
+
         self.add_recent_file(path);
 
         // Move cursor up to the start of the recent files content (not including the header)
@@ -210,7 +522,7 @@ impl UI {
             } else {
                 format!("  {}", file)
             };
-            println!("{}", display);
+            println!("{}", white_bold.apply_to(display));
         }
 
         // Fill remaining lines with blanks (clear them)
@@ -224,8 +536,12 @@ impl UI {
 
     /// Draw the recent files section
     pub fn draw_recent_files(&self) -> io::Result<()> {
-        println!("{}", "=".repeat(70));
-        println!("RECENT FILES:");
+        use console::Style;
+        let style = self.get_style();
+        let white_bold = Style::new().white().bold();
+
+        println!("{}", white_bold.apply_to("=".repeat(70)));
+        println!("{}", style.apply_to("RECENT FILES:").bold());
 
         for file in &self.recent_files {
             // Truncate long paths to fit screen
@@ -234,7 +550,7 @@ impl UI {
             } else {
                 format!("  {}", file)
             };
-            println!("{}", display);
+            println!("{}", white_bold.apply_to(display));
         }
 
         for _ in self.recent_files.len()..self.max_recent {
@@ -270,31 +586,38 @@ impl UI {
             // Clear and redraw
             self.term.clear_screen()?;
             self.print_banner_with_mode(mode)?;
+
+            use console::Style;
+            let style = self.get_style();
+            let white_bold = Style::new().white().bold();
+
             println!();
-            println!("{}", title);
+            println!("{}", style.apply_to(title).bold());
             println!();
-            println!("{}", "=".repeat(70));
+            println!("{}", white_bold.apply_to("=".repeat(70)));
             println!(
-                "  TOTAL: {} files ({})",
-                total_files,
-                format_size(total_size)
+                "  {} {} {} {}",
+                style.apply_to("TOTAL:").bold(),
+                white_bold.apply_to(format!("{}", total_files)).italic(),
+                white_bold.apply_to("files"),
+                white_bold.apply_to(format!("({})", format_size(total_size))).italic()
             );
-            println!("{}", "=".repeat(70));
+            println!("{}", white_bold.apply_to("=".repeat(70)));
             println!();
 
             // Display current section
             match sections[current_section] {
                 "Categories" => {
-                    println!("CATEGORY DISTRIBUTION");
+                    println!("{}", style.apply_to("CATEGORY DISTRIBUTION").bold());
                     println!();
-                    let pie_chart = create_fixed_pie_chart(stats, total_drive_size);
+                    let pie_chart = create_fixed_pie_chart(stats, total_drive_size, &self.color_theme);
                     for line in pie_chart {
                         println!("  {}", line);
                     }
                     println!();
                 }
                 "Statistics" => {
-                    println!("STATISTICS");
+                    println!("{}", style.apply_to("STATISTICS").bold());
                     println!();
                     let statistics = create_statistics_summary(stats, total_files, total_size);
                     for line in statistics {
@@ -303,7 +626,7 @@ impl UI {
                     println!();
                 }
                 "Largest Files" => {
-                    println!("TOP 10 LARGEST FILES");
+                    println!("{}", style.apply_to("TOP 10 LARGEST FILES").bold());
                     println!();
                     let leaderboard = create_leaderboard(all_files);
                     for line in leaderboard {
@@ -349,10 +672,17 @@ impl UI {
         total_sections: usize,
         section_name: &str,
     ) -> io::Result<String> {
-        use dialoguer::{theme::ColorfulTheme, Select};
+        use dialoguer::Select;
+        use console::Style;
 
-        println!("{}", "=".repeat(70));
-        println!("Section {}/{}: {}", current_section + 1, total_sections, section_name);
+        let style = self.get_style();
+        let white_bold = Style::new().white().bold();
+
+        println!("{}", white_bold.apply_to("=".repeat(70)));
+        println!("{} {}",
+            style.apply_to(format!("Section {}/{}:", current_section + 1, total_sections)).bold(),
+            white_bold.apply_to(section_name)
+        );
         println!();
 
         let mut options = Vec::new();
@@ -371,7 +701,8 @@ impl UI {
         // Default to "Next →" if it exists in options, otherwise default to first option
         let default_index = options.iter().position(|&opt| opt == "Next →").unwrap_or(0);
 
-        let selection = Select::with_theme(&ColorfulTheme::default())
+        let theme = self.get_theme();
+        let selection = Select::with_theme(theme.as_ref())
             .with_prompt("Navigate")
             .items(&options)
             .default(default_index)
@@ -388,25 +719,37 @@ impl UI {
 
     /// Print an info message
     pub fn print_info(&self, message: &str) -> io::Result<()> {
-        println!("[*] {}", message);
+        use console::Style;
+        let (info_style, _, _, _) = self.get_status_styles();
+        let white_bold = Style::new().white().bold();
+        println!("{} {}", info_style.apply_to("[*]").bold(), white_bold.apply_to(message));
         Ok(())
     }
 
     /// Print an error message
     pub fn print_error(&self, message: &str) -> io::Result<()> {
-        println!("[!] ERROR: {}", message);
+        use console::Style;
+        let (_, _, error_style, _) = self.get_status_styles();
+        let white_bold = Style::new().white().bold();
+        println!("{} {}", error_style.apply_to("[!] ERROR:").bold(), white_bold.apply_to(message));
         Ok(())
     }
 
     /// Print a success message
     pub fn print_success(&self, message: &str) -> io::Result<()> {
-        println!("[✓] {}", message);
+        use console::Style;
+        let (_, _, _, success_style) = self.get_status_styles();
+        let white_bold = Style::new().white().bold();
+        println!("{} {}", success_style.apply_to("[✓]").bold(), white_bold.apply_to(message));
         Ok(())
     }
 
     /// Print a warning message
     pub fn print_warning(&self, message: &str) -> io::Result<()> {
-        println!("[!] WARNING: {}", message);
+        use console::Style;
+        let (_, warning_style, _, _) = self.get_status_styles();
+        let white_bold = Style::new().white().bold();
+        println!("{} {}", warning_style.apply_to("[!] WARNING:").bold(), white_bold.apply_to(message));
         Ok(())
     }
 
@@ -433,23 +776,26 @@ impl Drop for UI {
 fn create_fixed_pie_chart(
     stats: &[(String, usize, u64)],
     total_drive_size: Option<u64>,
+    _theme: &str,
 ) -> Vec<String> {
     let mut lines = Vec::new();
 
     // Calculate total scanned size
     let total_scanned: u64 = stats.iter().map(|(_, _, size)| size).sum();
     if total_scanned == 0 {
-        lines.push("No data to display".to_string());
+        use console::Style;
+        let white_bold = Style::new().white().bold();
+        lines.push(format!("{}", white_bold.apply_to("No data to display")));
         return lines;
     }
 
     // Use drive size if provided, otherwise use scanned size
     let reference_size = total_drive_size.unwrap_or(total_scanned);
 
-    // Map categories to consistent characters based on category name
-    fn get_category_char(_category: &str) -> &'static str {
-        "█" // Use same block character for all categories
-    }
+    use console::Style;
+
+    let white_bold = Style::new().white().bold();
+    let char = "█";
 
     // Sort categories by size descending
     let mut sorted_stats: Vec<_> = stats.iter().collect();
@@ -461,9 +807,6 @@ fn create_fixed_pie_chart(
     for (category, count, size) in sorted_stats.iter() {
         let percentage_of_drive = (*size as f64 / reference_size as f64) * 100.0;
         let bar_length = ((*size as f64 / reference_size as f64) * BAR_WIDTH as f64) as usize;
-
-        // Get consistent character for this category
-        let char = get_category_char(category);
 
         // Build the bar
         let bar = if bar_length > 0 {
@@ -482,17 +825,20 @@ fn create_fixed_pie_chart(
             0
         };
 
-        lines.push(format!(
-            "{} {:<15} {}{} {:>6.2}% {:>12} ({} files, avg: {})",
+        // Apply white bold to text, italicize important numbers
+        let line = format!(
+            "{} {:<15} {}{} {} {} ({} files, avg: {})",
             char,
             category_label,
             bar,
             " ".repeat(BAR_WIDTH.saturating_sub(bar_length)),
-            percentage_of_drive,
-            format_size(*size),
+            white_bold.apply_to(format!("{:>6.2}%", percentage_of_drive)).italic(),
+            white_bold.apply_to(format!("{:>12}", format_size(*size))).italic(),
             count,
-            format_size(avg_size)
-        ));
+            white_bold.apply_to(format_size(avg_size)).italic()
+        );
+
+        lines.push(format!("{}", white_bold.apply_to(line)));
     }
 
     lines
@@ -504,10 +850,12 @@ fn create_statistics_summary(
     total_files: usize,
     total_size: u64,
 ) -> Vec<String> {
+    use console::Style;
+    let white_bold = Style::new().white().bold();
     let mut lines = Vec::new();
 
     if total_files == 0 {
-        lines.push("No data to display".to_string());
+        lines.push(format!("{}", white_bold.apply_to("No data to display")));
         return lines;
     }
 
@@ -538,33 +886,43 @@ fn create_statistics_summary(
         0
     };
 
-    // Display statistics
-    lines.push(format!("Average file size:        {}", format_size(overall_avg)));
-    lines.push(format!("Median file size:         {}", format_size(median)));
-    lines.push(format!("Total categories:         {}", stats.len()));
+    // Display statistics - italicize important values
+    lines.push(format!("{} {}",
+        white_bold.apply_to("Average file size:       "),
+        white_bold.apply_to(format_size(overall_avg)).italic()
+    ));
+    lines.push(format!("{} {}",
+        white_bold.apply_to("Median file size:        "),
+        white_bold.apply_to(format_size(median)).italic()
+    ));
+    lines.push(format!("{} {}",
+        white_bold.apply_to("Total categories:        "),
+        white_bold.apply_to(format!("{}", stats.len())).italic()
+    ));
 
     if let Some((cat, count, size)) = largest_category {
-        lines.push(format!(
-            "Largest category:         {} ({}, {} files)",
-            cat,
-            format_size(*size),
-            count
+        lines.push(format!("{} {} ({}, {} files)",
+            white_bold.apply_to("Largest category:        "),
+            white_bold.apply_to(cat).italic(),
+            white_bold.apply_to(format_size(*size)).italic(),
+            white_bold.apply_to(format!("{}", count)).italic()
         ));
     }
 
     if let Some((cat, count, size)) = smallest_category {
-        lines.push(format!(
-            "Smallest category:        {} ({}, {} files)",
-            cat,
-            format_size(*size),
-            count
+        lines.push(format!("{} {} ({}, {} files)",
+            white_bold.apply_to("Smallest category:       "),
+            white_bold.apply_to(cat).italic(),
+            white_bold.apply_to(format_size(*size)).italic(),
+            white_bold.apply_to(format!("{}", count)).italic()
         ));
     }
 
     if let Some((cat, count, _)) = most_files_category {
-        lines.push(format!(
-            "Most files in category:   {} ({} files)",
-            cat, count
+        lines.push(format!("{} {} ({} files)",
+            white_bold.apply_to("Most files in category:  "),
+            white_bold.apply_to(cat).italic(),
+            white_bold.apply_to(format!("{}", count)).italic()
         ));
     }
 
@@ -573,10 +931,12 @@ fn create_statistics_summary(
 
 // Helper function to create top 10 largest files leaderboard
 fn create_leaderboard(all_files: &[(String, u64, String)]) -> Vec<String> {
+    use console::Style;
+    let white_bold = Style::new().white().bold();
     let mut lines = Vec::new();
 
     if all_files.is_empty() {
-        lines.push("No files to display".to_string());
+        lines.push(format!("{}", white_bold.apply_to("No files to display")));
         return lines;
     }
 
@@ -586,13 +946,15 @@ fn create_leaderboard(all_files: &[(String, u64, String)]) -> Vec<String> {
     let top_files: Vec<_> = sorted_files.iter().take(10).collect();
 
     // Header
-    lines.push(format!(
-        "{:<3} {:<35} {:<12} {:<15}",
-        "Rank", "Name", "Size", "Category"
+    lines.push(format!("{}",
+        white_bold.apply_to(format!(
+            "{:<3} {:<35} {:<12} {:<15}",
+            "Rank", "Name", "Size", "Category"
+        ))
     ));
-    lines.push("-".repeat(68));
+    lines.push(format!("{}", white_bold.apply_to("-".repeat(68))));
 
-    // Top 10 files
+    // Top 10 files - italicize important data (rank, size)
     for (rank, (name, size, category)) in top_files.iter().enumerate() {
         // Truncate long file names
         let display_name = if name.len() > 35 {
@@ -601,13 +963,15 @@ fn create_leaderboard(all_files: &[(String, u64, String)]) -> Vec<String> {
             name.to_string()
         };
 
-        lines.push(format!(
+        let line = format!(
             "{:<3} {:<35} {:<12} {:<15}",
-            rank + 1,
+            white_bold.apply_to(format!("{}", rank + 1)).italic(),
             display_name,
-            format_size(*size),
+            white_bold.apply_to(format_size(*size)).italic(),
             category
-        ));
+        );
+
+        lines.push(format!("{}", white_bold.apply_to(line)));
     }
 
     lines

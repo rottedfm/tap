@@ -1,4 +1,8 @@
-// cli.rs
+//! Command-line interface definitions.
+//!
+//! This module defines the CLI structure using clap, including all commands
+//! and their arguments.
+
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use crate::tui::BANNER;

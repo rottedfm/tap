@@ -1,22 +1,27 @@
-// src/inspect.rs
+//! Drive inspection workflow.
+//!
+//! This module implements the inspect command, which mounts a drive, scans
+//! its contents, and displays categorized file statistics.
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::config::Config;
 use crate::mount::{mount_drive_readonly, unmount_drive, validate_source_path};
 use crate::scanner::{count_files, scan_directory};
 use crate::tui::{Mode, UI};
 
-pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
+pub async fn handle_inspect(drive: &str, config: &Config) -> color_eyre::Result<()> {
     // Check if it's a device or a path
     let is_device = drive.starts_with("/dev/");
     let source_path = if is_device {
-        mount_drive_readonly(drive).await?
+        mount_drive_readonly(drive, &config.ui.color.theme).await?
     } else {
-        validate_source_path(drive)?
+        validate_source_path(drive, &config.ui.color.theme)?
     };
 
-    // Create UI
-    let ui = UI::new()?;
+    // Create UI with color theme from config
+    let ui = UI::new()?.with_color_theme(config.ui.color.theme.clone());
     let inspect_msg = format!("Source: {}", source_path.display());
     ui.init(&Mode::Inspect, &inspect_msg)?;
 
@@ -96,7 +101,7 @@ pub async fn handle_inspect(drive: &str) -> color_eyre::Result<()> {
 
     // Unmount drive if we mounted it
     if is_device {
-        unmount_drive(&source_path, drive)?;
+        unmount_drive(&source_path, drive, &config.ui.color.theme)?;
     }
 
     Ok(())

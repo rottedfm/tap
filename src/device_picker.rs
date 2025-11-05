@@ -1,11 +1,15 @@
-// device_picker.rs
+//! Interactive device selection.
+//!
+//! This module provides an interactive UI for selecting block devices (partitions)
+//! from available system storage, filtering out system partitions and encrypted volumes.
+
 use console::Term;
-use dialoguer::{theme::ColorfulTheme, Select};
+use dialoguer::Select;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use crate::tui::BANNER;
+use crate::tui::{BANNER, UI};
 
 #[derive(Debug)]
 pub struct BlockDevice {
@@ -151,18 +155,32 @@ fn human_readable_size(bytes: u64) -> String {
 }
 
 /// Show interactive device picker and return selected device path
-pub fn pick_device() -> color_eyre::Result<String> {
+pub fn pick_device(theme: &str) -> color_eyre::Result<String> {
     // Clear screen and show banner
     let term = Term::stdout();
     term.clear_screen()?;
 
-    println!("{}", BANNER);
+    // Get style for theme
+    let style = match theme {
+        "cyan" => console::Style::new().cyan(),
+        "magenta" => console::Style::new().magenta(),
+        "yellow" => console::Style::new().yellow(),
+        "green" => console::Style::new().green(),
+        "red" => console::Style::new().red(),
+        "blue" => console::Style::new().blue(),
+        "white" => console::Style::new().white(),
+        _ => console::Style::new().white(),
+    };
+
+    let white_bold = console::Style::new().white().bold();
+
+    println!("{}", style.apply_to(BANNER).bold());
     println!();
-    println!("{}", "=".repeat(70));
-    println!("DEVICE SELECTION");
-    println!("{}", "=".repeat(70));
+    println!("{}", white_bold.apply_to("=".repeat(70)));
+    println!("{}", style.apply_to("DEVICE SELECTION").bold());
+    println!("{}", white_bold.apply_to("=".repeat(70)));
     println!();
-    println!("Available partitions (excluding system drives):");
+    println!("{}", white_bold.apply_to("Available partitions (excluding system drives):"));
     println!();
 
     let devices = enumerate_block_devices()?;
@@ -172,7 +190,8 @@ pub fn pick_device() -> color_eyre::Result<String> {
         .map(|d| d.display_name.as_str())
         .collect();
 
-    let selection = Select::with_theme(&ColorfulTheme::default())
+    let colorful_theme = UI::get_colorful_theme(theme);
+    let selection = Select::with_theme(&colorful_theme)
         .with_prompt("Select a partition")
         .items(&items)
         .default(0)

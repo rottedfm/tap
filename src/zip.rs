@@ -1,4 +1,8 @@
-// src/zip.rs
+//! Archive creation utilities.
+//!
+//! This module provides functionality for creating ZIP archives from directories,
+//! with progress tracking and optimized compression settings.
+
 use indicatif::ProgressBar;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
