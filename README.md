@@ -1,50 +1,126 @@
-A template Rust project with fully functional and no-frills Nix support, as well as builtin VSCode configuration to get IDE experience without any manual setup (just [install direnv](https://nixos.asia/en/direnv), open in VSCode and accept the suggestions). It uses [crane](https://crane.dev/), via [rust-flake](https://github.com/juspay/rust-flake).
+# TAP - Transfer and Analyze Project
 
-> [!NOTE]
-> If you are looking for the original template based on [this blog post](https://srid.ca/rust-nix)'s use of `crate2nix`, browse from [this tag](https://github.com/srid/tap/tree/crate2nix). The evolution of this template can be gleaned from [releases](https://github.com/srid/tap/releases).
+A high-performance file investigation and export tool that intelligently categorizes files for LLM analysis. Built with Rust and Nix for maximum reliability and reproducibility.
 
-## Usage
+## Features
 
-You can use [omnix](https://omnix.page/om/init.html)[^omnix] to initialize this template:
-```
-nix run nixpkgs#omnix -- init github:srid/tap -o ~/my-rust-project
-```
+- **Smart File Categorization**: Automatically categorizes files based on their type and content
+- **Interactive Device Selection**: Pick drives and devices through an intuitive TUI
+- **Flexible Export Options**: Export files individually or as compressed archives
+- **LLM-Optimized**: Organizes files in a structure ideal for AI analysis workflows
+- **Async Performance**: Blazing-fast file operations using Tokio
+- **Beautiful Terminal UI**: Color-themed interface with proper terminal size validation
 
-[^omnix]: If initializing manually, make sure to:
-    - Change `name` in Cargo.toml.
-    - Run `cargo generate-lockfile` in the nix shelld
+## Installation
 
-## Adapting this template
-
-- There are two CI workflows, and one of them uses Nix which is slower (unless you configure a cache) than the other one based on rustup. Pick one or the other depending on your trade-offs.
-
-## Development (Flakes)
-
-This repo uses [Flakes](https://nixos.asia/en/flakes) from the get-go.
+### Using Nix Flakes (Recommended)
 
 ```bash
-# Dev shell
+# Clone the repository
+git clone git@github.com:rottedfm/tap.git
+cd tap
+
+# Enter development shell
 nix develop
 
-# or run via cargo
-nix develop -c cargo run
-
-# build
+# Build the project
 nix build
 ```
 
-We also provide a [`justfile`](https://just.systems/) for Makefile'esque commands to be run inside of the devShell.
+### Using Cargo
 
-## Tips
+```bash
+cargo build --release
+```
 
-- Run `nix flake update` to update all flake inputs.
-- Run `nix --accept-flake-config run github:juspay/omnix ci` to build _all_ outputs.
-- [pre-commit] hooks will automatically be setup in Nix shell. You can also run `pre-commit run -a` manually to run the hooks (e.g.: to autoformat the project tree using `rustfmt`, `nixpkgs-fmt`, etc.).
+## Usage
 
-## Discussion
+### Inspect a Drive
 
-- [Zulip](https://nixos.zulipchat.com/#narrow/stream/413950-nix)
+Scan and categorize files on a drive:
 
-## See Also
+```bash
+tap inspect [DRIVE]
+```
 
-- [nixos.wiki: Packaging Rust projects with nix](https://nixos.wiki/wiki/Rust#Packaging_Rust_projects_with_nix)
+If no drive is specified, an interactive picker will be shown.
+
+### Export Files
+
+Export categorized files to a directory:
+
+```bash
+tap export [OPTIONS] [DRIVE]
+
+Options:
+  -o, --output-dir <PATH>  Output directory (default: ./export)
+  -z, --zip                Create a zip archive of exported files
+```
+
+## Configuration
+
+TAP can be configured via a TOML configuration file. See the default configuration for available options including UI theming and categorization rules.
+
+## Development
+
+This project uses Nix flakes for reproducible development environments:
+
+```bash
+# Enter development shell
+nix develop
+
+# Run directly via cargo
+nix develop -c cargo run
+
+# Build release binary
+nix build
+
+# Update dependencies
+nix flake update
+```
+
+### Pre-commit Hooks
+
+Pre-commit hooks are automatically setup in the Nix shell for code formatting and linting:
+
+```bash
+pre-commit run -a
+```
+
+### Available Commands
+
+We provide a [`justfile`](https://just.systems/) for common development tasks:
+
+```bash
+just --list
+```
+
+## Project Structure
+
+- `src/categories.rs` - File categorization logic
+- `src/cli.rs` - Command-line argument parsing
+- `src/config.rs` - Configuration management
+- `src/device_picker.rs` - Interactive device selection
+- `src/export.rs` - File export functionality
+- `src/inspect.rs` - Drive inspection logic
+- `src/scanner.rs` - File system scanning
+- `src/tui.rs` - Terminal UI components
+- `src/zip.rs` - Archive creation utilities
+
+## Requirements
+
+- Rust 1.85+
+- Nix with flakes enabled (for Nix-based builds)
+
+## License
+
+Licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
