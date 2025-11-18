@@ -4,7 +4,7 @@
 
 Built with Rust for maximum performance and reliability.
 
-![TAP Help Screen](./demos/help.gif)
+![TAP Help Screen](https://raw.githubusercontent.com/rottedfm/tap/main/demos/help.gif)
 
 ## Features
 
