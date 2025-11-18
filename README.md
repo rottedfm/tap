@@ -2,11 +2,11 @@
 
 **Transfer and Analyze Project** - A blazingly fast file investigation and export tool that intelligently categorizes files from mountable drives.
 
-Built with Rust for performance and Nix for reproducible development environments.
+Built with Rust for maximum performance and reliability.
 
-## Demo
-
-![TAP Help](demos/help.gif)
+<div align="center">
+  <img src="demos/help.gif" alt="TAP Help Screen" />
+</div>
 
 ## Features
 
@@ -19,22 +19,15 @@ Built with Rust for performance and Nix for reproducible development environment
 
 ## Installation
 
-### Using Nix Flakes (Recommended)
-
 ```bash
 git clone git@github.com:rottedfm/tap.git
 cd tap
-nix develop
-nix build
-```
-
-### Using Cargo
-
-```bash
 cargo build --release
 ```
 
 **Requirements**: Rust 1.85+
+
+The compiled binary will be available at `target/release/tap`.
 
 ## Usage
 
@@ -42,10 +35,8 @@ cargo build --release
 
 Scan and categorize all files on a drive:
 
-![TAP Inspect](demos/inspect.gif)
-
 ```bash
-tap inspect [DRIVE]
+cargo run --release -- inspect [DRIVE]
 ```
 
 If no drive is specified, an interactive picker will be shown.
@@ -54,10 +45,8 @@ If no drive is specified, an interactive picker will be shown.
 
 Export categorized files to a directory:
 
-![TAP Export](demos/export.gif)
-
 ```bash
-tap export [OPTIONS] [DRIVE]
+cargo run --release -- export [OPTIONS] [DRIVE]
 
 Options:
   -o, --output-dir <PATH>  Output directory (default: ./export)
@@ -70,28 +59,21 @@ TAP can be configured via a TOML configuration file for customizing UI themes an
 
 ## Development
 
-This project uses Nix flakes for reproducible development environments:
-
 ```bash
-# Enter development shell
-nix develop
-
-# Run directly via cargo
+# Run directly
 cargo run
 
 # Build release binary
-nix build
+cargo build --release
 
-# Update dependencies
-nix flake update
-```
+# Run tests
+cargo test
 
-### Pre-commit Hooks
+# Format code
+cargo fmt
 
-Pre-commit hooks are automatically configured in the Nix shell for code formatting and linting:
-
-```bash
-pre-commit run -a
+# Run linter
+cargo clippy
 ```
 
 ## Project Structure
