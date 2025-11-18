@@ -1,4 +1,4 @@
-I # TAP
+# TAP
 
 **Transfer and Analyze Project** - A blazingly fast file investigation and export tool that intelligently categorizes files from mountable drives.
 
