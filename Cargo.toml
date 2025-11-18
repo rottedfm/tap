@@ -1,15 +1,26 @@
+cargo-features = ["edition2024"]
+
 [package]
 name = "tap"
 version = "0.1.0"
 edition = "2024"
-authors = ["Your Name <your.email@example.com>"]
-description = "A file investigation and export tool that categorizes files for LLM analysis"
+authors = ["rottedfm"]
+description = "A blazingly fast file investigation and export tool that intelligently categorizes files from mountable drives"
 readme = "README.md"
-repository = "https://github.com/yourusername/tap"
+repository = "https://github.com/rottedfm/tap"
 license = "MIT OR Apache-2.0"
+homepage = "https://github.com/rottedfm/tap"
 keywords = ["llm", "files", "categorization", "export", "analysis"]
 categories = ["command-line-utilities", "filesystem"]
 rust-version = "1.85"
+exclude = [
+    "tap_inspect_*.txt",
+    ".envrc",
+    "flake.*",
+    "nix/",
+    "justfile",
+    "rust-toolchain.toml",
+]
 
 [lib]
 name = "tap"
@@ -20,6 +31,7 @@ name = "tap"
 path = "src/main.rs"
 
 [dependencies]
+chrono = "0.4"
 clap = { version = "4.5.49", features = ["derive"] }
 console = "0.16.1"
 dialoguer = "0.12.0"

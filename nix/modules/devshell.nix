@@ -12,6 +12,7 @@
         nixd # Nix language server
         bacon
         ntfs3g # NTFS filesystem support
+        dmraid # Intel RAID (ISW) management tool
         config.process-compose.cargo-doc-live.outputs.package
       ];
     };

@@ -1,4 +1,4 @@
-  //! File export and copy operations.
+//! File export and copy operations.
 //!
 //! This module handles exporting files from a source location to a destination,
 //! organizing them by category. It supports concurrent file operations for
@@ -16,7 +16,7 @@ use dialoguer::Confirm;
 use crate::config::Config;
 use crate::log::write_log_file;
 use crate::mount::{mount_drive_readonly, unmount_drive, validate_source_path};
-use crate::scanner::{count_files, scan_directory, ScanStats};
+use crate::scanner::{ScanStats, count_files, scan_directory};
 use crate::tui::{Mode, UI};
 use crate::zip::zip_directory;
 
@@ -270,7 +270,14 @@ pub async fn handle_export(
     // Display scan results
     let summary = scan_stats.get_summary();
     let all_files = scan_stats.get_all_files();
-    ui.print_summary(&Mode::Export, "SCAN RESULTS", &summary, &all_files, None, false)?;
+    ui.print_summary(
+        &Mode::Export,
+        "SCAN RESULTS",
+        &summary,
+        &all_files,
+        None,
+        false,
+    )?;
 
     // Clear screen before starting copy phase
     ui.term.clear_screen()?;
@@ -335,7 +342,14 @@ pub async fn handle_export(
     // Display scan results using the same format as inspect
     let summary = scan_stats.get_summary();
     let all_files = scan_stats.get_all_files();
-    ui.print_summary(&Mode::Export, "COPY COMPLETE", &summary, &all_files, None, false)?;
+    ui.print_summary(
+        &Mode::Export,
+        "COPY COMPLETE",
+        &summary,
+        &all_files,
+        None,
+        false,
+    )?;
 
     // Clear screen for post-summary messages
     ui.term.clear_screen()?;
@@ -344,7 +358,10 @@ pub async fn handle_export(
 
     // Display export errors if any
     if export_stats.failed > 0 {
-        ui.print_error(&format!("{} file(s) failed to copy (permission denied or I/O error)", export_stats.failed))?;
+        ui.print_error(&format!(
+            "{} file(s) failed to copy (permission denied or I/O error)",
+            export_stats.failed
+        ))?;
         println!();
     }
 
@@ -382,28 +399,24 @@ pub async fn handle_export(
         let ui_arc = Arc::new(Mutex::new(ui));
         let counter = Arc::new(Mutex::new(0u64));
 
-        let zip_path = zip_directory(
-            output_dir,
-            pb,
-            {
-                let ui_arc = Arc::clone(&ui_arc);
-                let counter = Arc::clone(&counter);
-                move |path| {
-                    // Rate limit UI updates to prevent screen overflow
-                    // Only update every 100 files
-                    // Use try_lock to avoid blocking in the zip thread
-                    if let Ok(mut count) = counter.try_lock() {
-                        *count += 1;
+        let zip_path = zip_directory(output_dir, pb, {
+            let ui_arc = Arc::clone(&ui_arc);
+            let counter = Arc::clone(&counter);
+            move |path| {
+                // Rate limit UI updates to prevent screen overflow
+                // Only update every 100 files
+                // Use try_lock to avoid blocking in the zip thread
+                if let Ok(mut count) = counter.try_lock() {
+                    *count += 1;
 
-                        if *count % 100 == 0 {
-                            if let Ok(mut ui) = ui_arc.try_lock() {
-                                let _ = ui.update_recent_files(path);
-                            }
+                    if *count % 100 == 0 {
+                        if let Ok(mut ui) = ui_arc.try_lock() {
+                            let _ = ui.update_recent_files(path);
                         }
                     }
                 }
-            },
-        )
+            }
+        })
         .await?;
 
         // Get UI back
@@ -426,7 +439,14 @@ pub async fn handle_export(
         // Display scan results using the same format as inspect
         let summary = scan_stats.get_summary();
         let all_files = scan_stats.get_all_files();
-        ui.print_summary(&Mode::Export, "ZIP COMPLETE", &summary, &all_files, None, false)?;
+        ui.print_summary(
+            &Mode::Export,
+            "ZIP COMPLETE",
+            &summary,
+            &all_files,
+            None,
+            false,
+        )?;
 
         // Clear screen for final messages
         ui.term.clear_screen()?;
@@ -442,10 +462,7 @@ pub async fn handle_export(
         ui.print_success("Cleanup complete")?;
         println!();
     } else {
-        ui.print_success(&format!(
-            "Export complete: {}",
-            output_dir.display()
-        ))?;
+        ui.print_success(&format!("Export complete: {}", output_dir.display()))?;
         println!();
     }
 

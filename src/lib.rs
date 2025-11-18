@@ -110,5 +110,5 @@ pub mod zip;
 
 // Re-export commonly used types
 pub use config::Config;
-pub use scanner::{FileInfo, ScanStats};
 pub use export::ExportStats;
+pub use scanner::{FileInfo, ScanStats};

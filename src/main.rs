@@ -30,7 +30,7 @@ async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Commands::Inspect { drive } => {
+        Commands::Inspect { drive, log } => {
             // Check terminal size before device picker
             UI::check_terminal_size(&Mode::Inspect, &config.ui.color.theme)?;
 
@@ -38,7 +38,7 @@ async fn main() -> color_eyre::Result<()> {
                 Some(d) => d,
                 None => pick_device(&config.ui.color.theme)?,
             };
-            handle_inspect(&drive_path, &config).await?;
+            handle_inspect(&drive_path, log, &config).await?;
         }
         Commands::Export {
             drive,

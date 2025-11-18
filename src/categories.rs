@@ -31,52 +31,38 @@ use std::path::Path;
 pub fn get_categories() -> HashMap<&'static str, Vec<&'static str>> {
     let mut categories = HashMap::new();
 
-    categories.insert(
-        "documents",
-        vec![".doc", ".docx", ".pdf", ".obt", ".rtf", ".txt", ".md"],
-    );
+    categories.insert("documents", vec![
+        ".doc", ".docx", ".pdf", ".obt", ".rtf", ".txt", ".md",
+    ]);
 
     categories.insert("spreadsheets", vec![".xls", ".xlsx", ".ods", ".csv"]);
 
-    categories.insert(
-        "images",
-        vec![
-            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".svg", ".heic", ".webp",
-            ".ico",
-        ],
-    );
+    categories.insert("images", vec![
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".svg", ".heic", ".webp", ".ico",
+    ]);
 
-    categories.insert(
-        "videos",
-        vec![
-            ".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg",
-        ],
-    );
+    categories.insert("videos", vec![
+        ".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg",
+    ]);
 
-    categories.insert(
-        "audio",
-        vec![".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma"],
-    );
+    categories.insert("audio", vec![
+        ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma",
+    ]);
 
-    categories.insert(
-        "archives",
-        vec![".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"],
-    );
+    categories.insert("archives", vec![
+        ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz",
+    ]);
 
     categories.insert("email", vec![".eml", ".msg", ".pst", ".ost", ".mbox"]);
 
-    categories.insert(
-        "databases",
-        vec![".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"],
-    );
+    categories.insert("databases", vec![
+        ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb",
+    ]);
 
-    categories.insert(
-        "code",
-        vec![
-            ".py", ".js", ".html", ".css", ".xml", ".json", ".yaml", ".yml", ".php", ".cpp", ".c",
-            ".h", ".java", ".rs", ".go",
-        ],
-    );
+    categories.insert("code", vec![
+        ".py", ".js", ".html", ".css", ".xml", ".json", ".yaml", ".yml", ".php", ".cpp", ".c",
+        ".h", ".java", ".rs", ".go",
+    ]);
 
     categories.insert("config", vec![".ini", ".conf", ".cfg", ".config"]);
 
@@ -113,13 +99,13 @@ pub fn get_category(extension: &str) -> &'static str {
     let ext = extension.to_lowercase();
     let categories = get_categories();
 
-    for (category, extensions) in categories.iter() {
-        if extensions.contains(&ext.as_str()) {
-            return category;
-        }
-    }
-
-    "misc"
+    // Optimized: Use linear search since we're already allocating the HashMap anyway
+    // For production, consider using a static lazy HashMap or phf crate
+    categories
+        .iter()
+        .find(|(_, extensions)| extensions.contains(&ext.as_str()))
+        .map(|(category, _)| *category)
+        .unwrap_or("misc")
 }
 
 /// Extracts the file extension from a path.
@@ -242,8 +228,11 @@ mod tests {
         let categories = get_categories();
 
         for (category, extensions) in categories.iter() {
-            assert!(!extensions.is_empty(),
-                    "Category '{}' has no extensions", category);
+            assert!(
+                !extensions.is_empty(),
+                "Category '{}' has no extensions",
+                category
+            );
         }
     }
 }

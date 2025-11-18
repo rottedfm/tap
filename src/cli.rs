@@ -3,9 +3,9 @@
 //! This module defines the CLI structure using clap, including all commands
 //! and their arguments.
 
+use crate::tui::BANNER;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use crate::tui::BANNER;
 
 #[derive(Parser)]
 #[command(name = "tap")]
@@ -23,6 +23,10 @@ pub enum Commands {
     Inspect {
         /// Drive or path to inspect (e.g, /dev/sda or /mnt/evidence)
         drive: Option<String>,
+
+        /// Write a text log file summarizing the inspection results
+        #[arg(long)]
+        log: bool,
     },
     /// Export files from a drive organized by type
     Export {

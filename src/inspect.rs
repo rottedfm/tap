@@ -7,11 +7,16 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::config::Config;
+use crate::log::write_inspect_log;
 use crate::mount::{mount_drive_readonly, unmount_drive, validate_source_path};
 use crate::scanner::{count_files, scan_directory};
 use crate::tui::{Mode, UI};
 
-pub async fn handle_inspect(drive: &str, config: &Config) -> color_eyre::Result<()> {
+pub async fn handle_inspect(
+    drive: &str,
+    write_log: bool,
+    config: &Config,
+) -> color_eyre::Result<()> {
     // Check if it's a device or a path
     let is_device = drive.starts_with("/dev/");
     let source_path = if is_device {
@@ -90,7 +95,14 @@ pub async fn handle_inspect(drive: &str, config: &Config) -> color_eyre::Result<
     // Display scan results
     let summary = scan_stats.get_summary();
     let all_files = scan_stats.get_all_files();
-    ui.print_summary(&Mode::Inspect, "INSPECTION COMPLETE", &summary, &all_files, None, false)?;
+    ui.print_summary(
+        &Mode::Inspect,
+        "INSPECTION COMPLETE",
+        &summary,
+        &all_files,
+        None,
+        false,
+    )?;
 
     // Clear screen for final messages
     ui.term.clear_screen()?;
@@ -107,6 +119,21 @@ pub async fn handle_inspect(drive: &str, config: &Config) -> color_eyre::Result<
 
     ui.print_success("Inspection complete")?;
     println!();
+
+    // Write log file if requested
+    if write_log {
+        ui.print_info("Writing log file...")?;
+        match write_inspect_log(&source_path, &scan_stats).await {
+            Ok(log_path) => {
+                ui.print_success(&format!("Log written to: {}", log_path.display()))?;
+                println!();
+            }
+            Err(e) => {
+                ui.print_warning(&format!("Failed to write log file: {}", e))?;
+                println!();
+            }
+        }
+    }
 
     ui.cleanup()?;
 

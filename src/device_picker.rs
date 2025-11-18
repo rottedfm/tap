@@ -3,13 +3,13 @@
 //! This module provides an interactive UI for selecting block devices (partitions)
 //! from available system storage, filtering out system partitions and encrypted volumes.
 
+use crate::tui::{BANNER, UI};
 use console::Term;
 use dialoguer::Select;
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
-use crate::tui::{BANNER, UI};
 
 #[derive(Debug)]
 pub struct BlockDevice {
@@ -23,7 +23,7 @@ fn get_linux_system_partitions() -> HashSet<String> {
 
     // Use findmnt to get all mounted partitions
     if let Ok(output) = Command::new("findmnt")
-        .args(&["-n", "-o", "SOURCE"])
+        .args(["-n", "-o", "SOURCE"])
         .output()
     {
         if let Ok(stdout) = String::from_utf8(output.stdout) {
@@ -56,13 +56,25 @@ pub fn enumerate_block_devices() -> color_eyre::Result<Vec<BlockDevice>> {
         let file_name = entry.file_name();
         let name = file_name.to_string_lossy();
 
-        // Only look for partitions, not whole disks
-        let is_sata_partition = name.starts_with("sd") && name.len() > 3 && name.chars().nth(3).unwrap().is_ascii_digit();  // sda1, sdb2, etc.
-        let is_nvme_partition = name.starts_with("nvme") && name.contains("p") && name.chars().last().unwrap().is_ascii_digit();  // nvme0n1p1, etc.
-        let is_mmc_partition = name.starts_with("mmcblk") && name.contains("p") && name.chars().last().unwrap().is_ascii_digit();  // mmcblk0p1, etc.
-        let is_virtual_partition = name.starts_with("vd") && name.len() > 3 && name.chars().nth(3).unwrap().is_ascii_digit();  // vda1, vdb2, etc.
+        // Look for partitions only (keep it simple - no whole disks)
+        let is_sata_partition = name.starts_with("sd")
+            && name.len() > 3
+            && name.chars().nth(3).is_some_and(|c| c.is_ascii_digit()); // sda1, sdb2, etc.
+        let is_nvme_partition = name.starts_with("nvme")
+            && name.contains("p")
+            && name.chars().last().is_some_and(|c| c.is_ascii_digit()); // nvme0n1p1, etc.
+        let is_mmc_partition = name.starts_with("mmcblk")
+            && name.contains("p")
+            && name.chars().last().is_some_and(|c| c.is_ascii_digit()); // mmcblk0p1, etc.
+        let is_virtual_partition = name.starts_with("vd")
+            && name.len() > 3
+            && name.chars().nth(3).is_some_and(|c| c.is_ascii_digit()); // vda1, vdb2, etc.
 
-        if is_sata_partition || is_nvme_partition || is_mmc_partition || is_virtual_partition {
+        // Check if we should include this device
+        let should_include =
+            is_sata_partition || is_nvme_partition || is_mmc_partition || is_virtual_partition;
+
+        if should_include {
             let path_str = path.to_string_lossy().to_string();
 
             // Skip if this is a Linux system partition
@@ -75,8 +87,9 @@ pub fn enumerate_block_devices() -> color_eyre::Result<Vec<BlockDevice>> {
                 continue;
             }
 
-            // Get size info if available
+            // Get size info
             let size_info = get_device_size(&path);
+
             let display_name = if let Some(size) = size_info {
                 format!("{} ({})", path.display(), size)
             } else {
@@ -94,18 +107,20 @@ pub fn enumerate_block_devices() -> color_eyre::Result<Vec<BlockDevice>> {
     devices.sort_by(|a, b| a.path.cmp(&b.path));
 
     if devices.is_empty() {
-        return Err(color_eyre::eyre::eyre!("No removable partitions found. All partitions appear to be part of the Linux system."));
+        return Err(color_eyre::eyre::eyre!(
+            "No removable partitions found. All partitions appear to be part of the Linux system."
+        ));
     }
 
     Ok(devices)
 }
 
 /// Check if a device is LUKS encrypted
-fn is_encrypted(path: &PathBuf) -> bool {
+fn is_encrypted(path: &Path) -> bool {
     use std::process::Command;
 
     let output = Command::new("lsblk")
-        .args(&["-n", "-o", "FSTYPE", path.to_str().unwrap_or("")])
+        .args(["-n", "-o", "FSTYPE", path.to_str().unwrap_or("")])
         .output();
 
     if let Ok(output) = output {
@@ -119,11 +134,11 @@ fn is_encrypted(path: &PathBuf) -> bool {
 }
 
 /// Get device size information using lsblk
-fn get_device_size(path: &PathBuf) -> Option<String> {
+fn get_device_size(path: &Path) -> Option<String> {
     use std::process::Command;
 
     let output = Command::new("lsblk")
-        .args(&["-b", "-d", "-n", "-o", "SIZE", path.to_str()?])
+        .args(["-b", "-d", "-n", "-o", "SIZE", path.to_str()?])
         .output()
         .ok()?;
 
@@ -180,15 +195,15 @@ pub fn pick_device(theme: &str) -> color_eyre::Result<String> {
     println!("{}", style.apply_to("DEVICE SELECTION").bold());
     println!("{}", white_bold.apply_to("=".repeat(70)));
     println!();
-    println!("{}", white_bold.apply_to("Available partitions (excluding system drives):"));
+    println!(
+        "{}",
+        white_bold.apply_to("Available partitions (excluding system drives):")
+    );
     println!();
 
     let devices = enumerate_block_devices()?;
 
-    let items: Vec<&str> = devices
-        .iter()
-        .map(|d| d.display_name.as_str())
-        .collect();
+    let items: Vec<&str> = devices.iter().map(|d| d.display_name.as_str()).collect();
 
     let colorful_theme = UI::get_colorful_theme(theme);
     let selection = Select::with_theme(&colorful_theme)

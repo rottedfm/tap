@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::task;
 use walkdir::WalkDir;
-use zip::write::FileOptions;
 use zip::ZipWriter;
+use zip::write::FileOptions;
 
 pub async fn zip_directory<F>(
     source_dir: &Path,

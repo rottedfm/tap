@@ -114,7 +114,8 @@ impl ScanStats {
             .iter()
             .flat_map(|(category, files)| {
                 files.iter().map(move |f| {
-                    let name = f.path
+                    let name = f
+                        .path
                         .file_name()
                         .and_then(|s| s.to_str())
                         .unwrap_or("unknown")
@@ -385,7 +386,10 @@ mod tests {
         assert_eq!(summary.len(), 2);
 
         // Documents has 2 files
-        let docs = summary.iter().find(|(cat, _, _)| cat == "documents").unwrap();
+        let docs = summary
+            .iter()
+            .find(|(cat, _, _)| cat == "documents")
+            .unwrap();
         assert_eq!(docs.1, 2);
         assert_eq!(docs.2, 1024 + 512);
 
