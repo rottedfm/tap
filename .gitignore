@@ -4,3 +4,8 @@
 .direnv
 
 /.pre-commit-config.yaml
+
+# Nix development files
+flake.nix
+flake.lock
+nix/
