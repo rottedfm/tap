@@ -1,12 +1,10 @@
-# TAP
+I # TAP
 
 **Transfer and Analyze Project** - A blazingly fast file investigation and export tool that intelligently categorizes files from mountable drives.
 
 Built with Rust for maximum performance and reliability.
 
-<div align="center">
-  <img src="demos/help.gif" alt="TAP Help Screen" />
-</div>
+![TAP Help Screen](demos/help.gif)
 
 ## Features
 
